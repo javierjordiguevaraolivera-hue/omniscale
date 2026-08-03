@@ -1,109 +1,96 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+# OMNI Scale — reporte automatizado por plataforma
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
+Dashboard que reemplaza el reporte manual: cruza las conversiones y el revenue de
+**Everflow** con el gasto de las **cuentas publicitarias de Facebook**, y muestra
+gasto, conversiones, costo por conversión, revenue y profit por oferta y por
+plataforma. Se actualiza solo cada minuto.
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+Stack: Next.js (Vercel) + Supabase. Un solo usuario.
 
-## Features
+---
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Proxy
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Password-based authentication block installed via the [Supabase UI Library](https://supabase.com/ui/docs/nextjs/password-based-auth)
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+## Cómo funciona
 
-## Demo
+**Cada minuto** un cron de Vercel llama a `/api/cron/ingest`, que:
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+1. Pide a Everflow el reporte del día (una fila por oferta × source ID).
+2. Pide el gasto del día a cada token de Facebook registrado, en paralelo.
+3. Descubre las cuentas publicitarias y les asigna oferta leyendo `oid_<ID>` del
+   nombre (ej. `002 - auto hs oid_3560` → oferta 3560). Si el nombre no lo trae,
+   la cuenta queda "sin configurar" para asignarla a mano en **Cuentas**.
+4. Guarda un snapshot con el `offer_id` **congelado** en ese instante.
+5. Cuando cambia el día, consolida el anterior en `daily_summary` (una fila por
+   día y oferta) y borra los snapshots por minuto más viejos que la retención.
 
-## Deploy to Vercel
+**Efecto screenshot:** como cada snapshot graba la oferta que la cuenta tenía en
+ese momento, si mañana pasas una cuenta de "seguro de auto" a "seguro de vida",
+el histórico sigue mostrando auto y solo lo nuevo aparece como vida.
 
-Vercel deployment will guide you through creating a Supabase account and project.
+## Tablas (ver `supabase/schema.sql`)
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+| Tabla | Para qué |
+|---|---|
+| `settings` | zona horaria, `timezone_id` de Everflow, días de retención |
+| `connections` | API key de Everflow y un token por app / BM de Facebook |
+| `offers` | catálogo de ofertas (se llena solo desde Everflow) |
+| `ad_accounts` | cuentas publicitarias y su oferta **actual** |
+| `snap_offer_source` | snapshots del día: conversiones y revenue por oferta × source |
+| `snap_account` | snapshots del día: gasto por cuenta, con la oferta congelada |
+| `daily_summary` | histórico: `day`, `offer_id`, `spend`, `conversions`, `revenue`, `profit` |
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+Solo se conservan snapshots de los últimos días (configurable). El histórico
+consolidado no se borra nunca y ocupa muy poco.
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+## Puesta en marcha
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+1. **Crear el proyecto en Supabase** y ejecutar todo `supabase/schema.sql` en el
+   SQL Editor.
+2. **Variables de entorno** (local en `.env.local`, en Vercel en Project Settings
+   → Environment Variables), según `.env.example`:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` — solo servidor, nunca con prefijo `NEXT_PUBLIC`
+   - `CRON_SECRET` — cualquier cadena aleatoria; con ella presente, Vercel firma
+     las llamadas del cron y el endpoint rechaza lo demás
+3. **Crear el usuario** en `/auth/sign-up` (o desde Authentication en Supabase) y
+   luego, para que nadie más se registre, desactivar *Allow new users to sign up*
+   en Supabase → Authentication → Providers → Email.
+4. **Registrar credenciales** en `/connections`: la API key de Everflow y un token
+   de Facebook por cada app / VM. Pulsa **Actualizar ahora** para la primera carga.
+5. **Revisar `/accounts`**: asignar oferta a las cuentas que no traigan `oid_` en
+   el nombre.
 
-## Clone and run locally
+El cron ya viene definido en `vercel.json` (`* * * * *`). Requiere plan Pro; en
+Hobby solo se permite una ejecución diaria.
 
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
+## Rutas
 
-2. Create a Next.js app using the Supabase Starter template npx command
+| Ruta | Qué es |
+|---|---|
+| `/` | landing pública |
+| `/dashboard` | día en curso: KPIs, dos gráficos, tabla oferta × plataforma, cuentas |
+| `/history` | histórico consolidado con rangos de 3, 7, 15 y 30 días |
+| `/accounts` | mapeo cuenta publicitaria → oferta |
+| `/connections` | credenciales de Everflow y de las plataformas de gasto |
+| `/settings` | zona horaria y retención |
+| `/demo` | vista de muestra con datos inventados; se puede borrar |
+| `/terms-and-conditions`, `/privacy-policy`, `/data-deletion-policy` | legales |
 
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
-   ```
+## Desarrollo
 
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
-   ```
+```bash
+npm run dev
+```
 
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
+## Notas
 
-3. Use `cd` to change into the app's directory
-
-   ```bash
-   cd with-supabase-app
-   ```
-
-4. Rename `.env.example` to `.env.local` and update the following:
-
-  ```env
-  NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=[INSERT SUPABASE PROJECT API PUBLISHABLE OR ANON KEY]
-  ```
-  > [!NOTE]
-  > This example uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, which refers to Supabase's new **publishable** key format.
-  > Both legacy **anon** keys and new **publishable** keys can be used with this variable name during the transition period. Supabase's dashboard may show `NEXT_PUBLIC_SUPABASE_ANON_KEY`; its value can be used in this example.
-  > See the [full announcement](https://github.com/orgs/supabase/discussions/29260) for more information.
-
-  Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` can be found in [your Supabase project's API settings](https://supabase.com/dashboard/project/_?showConnect=true)
-
-5. You can now run the Next.js local development server:
-
-   ```bash
-   npm run dev
-   ```
-
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
-
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
-
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
-
-## Feedback and issues
-
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
-
-## More Supabase examples
-
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+- **Zona horaria:** define dónde empieza el día. Everflow usa un `timezone_id`
+  numérico (67 = New York) que debe coincidir con la zona elegida. Facebook
+  interpreta el rango según la zona de cada cuenta publicitaria, así que
+  conviene tenerlas todas en la misma.
+- **Rate limit de Everflow:** si el cron cada minuto da errores 429, sube el
+  intervalo en `vercel.json` a `*/2 * * * *`.
+- **TikTok y Google** ya se pueden registrar como conexión; falta su lector de
+  gasto. El resto del sistema (tablas, gráficos, mapeo) ya los soporta.
+- Los gráficos llevan `isAnimationActive={false}`: con la animación activada,
+  recharts 3.10 no dibuja las barras en este stack (Next 16 / React 19).
