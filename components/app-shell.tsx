@@ -5,6 +5,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  ScrollText,
   Settings,
   Wallet,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const navItems: {
   { label: "Histórico", href: "/history", icon: CalendarRange },
   { label: "Cuentas", href: "/accounts", icon: Wallet },
   { label: "Conexiones", href: "/connections", icon: KeyRound },
+  { label: "Logs", href: "/logs", icon: ScrollText },
   { label: "Ajustes", href: "/settings", icon: Settings },
 ];
 

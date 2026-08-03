@@ -55,6 +55,17 @@ acepta un `datasource` que Windsor devuelva como `google_ads`. Es a propósito �
 con comparación exacta, un cambio de nombre en Windsor haría desaparecer ese
 gasto sin dar ningún error.
 
+Protecciones alrededor de este campo, porque un scope mal puesto vacía el gasto:
+
+- Se elige con **casillas**, no escribiendo (el autocompletado del navegador metió
+  un correo aquí una vez y descartó todo el gasto de Windsor en silencio).
+- Un valor que no puede ser un nombre de plataforma se **ignora** y se cae al
+  valor por defecto, en vez de descartar todo.
+- Si Windsor devuelve filas y el scope las descarta **todas**, la corrida se
+  marca como error y lo dice en `/logs`.
+- `/logs` muestra el conteo por `datasource` recibido, y en rojo las que el scope
+  dejó fuera.
+
 ## Tablas (ver `supabase/schema.sql`)
 
 | Tabla | Para qué |
@@ -66,6 +77,7 @@ gasto sin dar ningún error.
 | `snap_offer_source` | snapshots del día: conversiones y revenue por oferta × source |
 | `snap_spend` | snapshots del día: gasto y clicks por plataforma × cuenta × campaña, con la oferta congelada |
 | `daily_summary` | histórico: `day`, `offer_id`, `spend`, `conversions`, `revenue`, `profit` |
+| `ingest_runs` | bitácora de las últimas 300 corridas (lo que se ve en `/logs`) |
 
 Solo se conservan snapshots de los últimos días (configurable). El histórico
 consolidado no se borra nunca y ocupa muy poco.
@@ -115,6 +127,7 @@ Hobby solo se permite una ejecución diaria.
 | `/history` | histórico consolidado con rangos de 3, 7, 15 y 30 días |
 | `/accounts` | mapeo plataforma · cuenta · campaña → oferta |
 | `/connections` | credenciales de Everflow, Facebook y Windsor |
+| `/logs` | bitácora de cada corrida: filas recibidas, guardadas y descartadas por fuente |
 | `/settings` | zona horaria y retención |
 | `/demo` | vista de muestra con datos inventados; se puede borrar |
 | `/terms-and-conditions`, `/privacy-policy`, `/data-deletion-policy` | legales |

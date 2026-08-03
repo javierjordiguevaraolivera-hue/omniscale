@@ -95,6 +95,24 @@ create table if not exists snap_spend (
 );
 create index if not exists idx_ss_day_captured on snap_spend (day, captured_at);
 
+-- Bitácora de cada corrida de ingesta: qué pidió, qué llegó, qué se descartó y
+-- por qué. Es lo que se ve en la pantalla /logs.
+create table if not exists ingest_runs (
+  id bigint generated always as identity primary key,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  day date,
+  origen text not null default 'cron',   -- cron | manual
+  ok boolean not null default false,
+  everflow_rows int not null default 0,
+  spend_rows int not null default 0,
+  descartadas int not null default 0,
+  sin_asignar int not null default 0,
+  detalle jsonb not null default '[]'::jsonb,
+  errores jsonb not null default '[]'::jsonb
+);
+create index if not exists idx_runs_started on ingest_runs (started_at desc);
+
 -- Resumen histórico: una fila por día x oferta. offer_id = 0 agrupa el gasto sin oferta asignada.
 create table if not exists daily_summary (
   day date not null,
@@ -170,6 +188,7 @@ alter table spend_map enable row level security;
 alter table snap_offer_source enable row level security;
 alter table snap_spend enable row level security;
 alter table daily_summary enable row level security;
+alter table ingest_runs enable row level security;
 
 drop policy if exists "auth read settings" on settings;
 create policy "auth read settings" on settings for select to authenticated using (true);
@@ -191,6 +210,9 @@ create policy "auth read snap_spend" on snap_spend for select to authenticated u
 
 drop policy if exists "auth read daily_summary" on daily_summary;
 create policy "auth read daily_summary" on daily_summary for select to authenticated using (true);
+
+drop policy if exists "auth read ingest_runs" on ingest_runs;
+create policy "auth read ingest_runs" on ingest_runs for select to authenticated using (true);
 
 -- Permite que el rol de la API llame a las funciones de lectura.
 grant execute on function intraday_series(date, int) to authenticated, service_role;

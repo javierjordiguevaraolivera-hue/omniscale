@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { runIngest, SCOPE_WINDSOR_DEFAULT } from "@/lib/ingest/run";
+import { runIngest } from "@/lib/ingest/run";
+import { sanearScope, SCOPE_WINDSOR_DEFAULT } from "@/lib/scope";
 import { mensajeDeError } from "@/lib/errores";
 
 // Las acciones de formulario devuelven `null` si todo fue bien, o el mensaje de
@@ -35,18 +36,28 @@ export async function addConnection(_previo: string | null, formData: FormData) 
     const platform = String(formData.get("platform") ?? "");
     const label = String(formData.get("label") ?? "").trim();
     const apiKey = String(formData.get("api_key") ?? "").trim();
-    const scope = String(formData.get("scope") ?? "").trim();
     if (!["everflow", "facebook", "windsor"].includes(platform)) {
       throw new Error("Plataforma no válida");
     }
     if (!apiKey) throw new Error("Falta la credencial");
+
+    let scope: string | null = null;
+    if (platform === "windsor") {
+      const limpio = sanearScope(String(formData.get("scope") ?? ""));
+      if (limpio.invalidos.length > 0) {
+        throw new Error(
+          `"${limpio.invalidos.join('", "')}" no es un nombre de plataforma. Marca las plataformas en las casillas.`,
+        );
+      }
+      scope = limpio.scope || SCOPE_WINDSOR_DEFAULT;
+    }
 
     const admin = createAdminClient();
     const { error } = await admin.from("connections").insert({
       platform,
       label: label || platform,
       api_key: apiKey,
-      scope: platform === "windsor" ? scope || SCOPE_WINDSOR_DEFAULT : null,
+      scope,
     });
     if (error) throw error;
     revalidatePath("/connections");
@@ -87,12 +98,18 @@ export async function toggleConnection(
 export async function updateScope(_previo: string | null, formData: FormData) {
   return conManejoDeError(async () => {
     const id = String(formData.get("id") ?? "");
-    const scope =
-      String(formData.get("scope") ?? "").trim() || SCOPE_WINDSOR_DEFAULT;
+    const limpio = sanearScope(String(formData.get("scope") ?? ""));
+    if (limpio.invalidos.length > 0) {
+      throw new Error(
+        `"${limpio.invalidos.join('", "')}" no es un nombre de plataforma. Marca las plataformas en las casillas.`,
+      );
+    }
+    const scope = limpio.scope || SCOPE_WINDSOR_DEFAULT;
     const admin = createAdminClient();
     const { error } = await admin.from("connections").update({ scope }).eq("id", id);
     if (error) throw error;
     revalidatePath("/connections");
+    revalidatePath("/logs");
   });
 }
 
@@ -153,9 +170,10 @@ export async function assignOffer(_previo: string | null, formData: FormData) {
 /** Botón "Actualizar ahora": dispara una corrida de ingesta manual. */
 export async function runIngestNow() {
   await requireUser();
-  const result = await runIngest();
+  const result = await runIngest("manual");
   revalidatePath("/dashboard");
   revalidatePath("/accounts");
   revalidatePath("/connections");
+  revalidatePath("/logs");
   return result;
 }

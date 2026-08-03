@@ -9,6 +9,8 @@ import {
 import { RunNowButton } from "@/components/run-now-button";
 import { PageHeader, Panel } from "@/components/panel";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { ScopePicker } from "@/components/scope-picker";
+import type { DetalleFuente } from "@/lib/ingest/run";
 
 export const dynamic = "force-dynamic";
 
@@ -39,15 +41,29 @@ function mask(key: string) {
 
 export default async function ConnectionsPage() {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("connections")
-    .select("*")
-    .order("platform")
-    .order("label");
+  const [{ data, error }, { data: runs }] = await Promise.all([
+    supabase.from("connections").select("*").order("platform").order("label"),
+    supabase
+      .from("ingest_runs")
+      .select("detalle")
+      .order("started_at", { ascending: false })
+      .limit(20),
+  ]);
   const conns = (data ?? []) as Connection[];
   const everflow = conns.filter((c) => c.platform === "everflow");
   const facebook = conns.filter((c) => c.platform === "facebook");
   const windsor = conns.filter((c) => c.platform === "windsor");
+
+  // Plataformas que Windsor devolvió de verdad en las últimas corridas: se
+  // marcan con un punto verde para no tener que adivinar cómo las nombra.
+  const vistas = new Set<string>();
+  for (const r of (runs ?? []) as { detalle: DetalleFuente[] }[]) {
+    for (const d of r.detalle ?? []) {
+      if (d.fuente !== "windsor") continue;
+      for (const ds of Object.keys(d.por_datasource ?? {})) vistas.add(ds);
+    }
+  }
+  const vistasWindsor = [...vistas];
 
   return (
     <div className="flex flex-col gap-md">
@@ -149,43 +165,43 @@ export default async function ConnectionsPage() {
       >
         <div className="p-md">
           <p className="mb-md text-label-sm text-on-surface-variant">
-            Trae gasto y clicks a nivel de campaña. Por defecto se toman{" "}
-            <strong>TikTok y Google</strong>: el gasto de Facebook entra por su
-            propio token y si Windsor también lo trajera se contaría doble. En
-            &ldquo;Plataformas&rdquo; puedes listar otras separadas por coma, o
-            poner <code>*</code> para aceptar todas. Basta el nombre corto:{" "}
-            <code>google</code> también acepta <code>google_ads</code>.
+            Trae gasto y clicks a nivel de campaña. Marca solo las plataformas
+            que quieres tomar de aquí: el gasto de Facebook entra por su propio
+            token y si Windsor también lo trajera se contaría doble. El punto
+            verde marca las que Windsor está devolviendo ahora. Basta el nombre
+            corto: <code>google</code> también acepta <code>google_ads</code>.
           </p>
-          <TablaConexiones conns={windsor} conScope />
-          <ActionForm
-            accion={addConnection}
-            className="mt-md grid gap-3 sm:grid-cols-[1fr_1fr_2fr_auto]"
-          >
+          <TablaConexiones conns={windsor} conScope vistas={vistasWindsor} />
+          <ActionForm accion={addConnection} className="mt-md flex flex-col gap-3">
             <input type="hidden" name="platform" value="windsor" />
-            <label className="grid gap-1.5">
-              <span className={labelClass}>Etiqueta</span>
-              <input name="label" placeholder="Windsor" className={inputClass} />
-            </label>
-            <label className="grid gap-1.5">
-              <span className={labelClass}>Plataformas</span>
-              <input
-                name="scope"
-                placeholder="tiktok,google"
-                className={inputClass}
-              />
-            </label>
-            <label className="grid gap-1.5">
-              <span className={labelClass}>api_key de Windsor</span>
-              <input
-                name="api_key"
-                type="password"
-                required
-                placeholder="••••••"
-                className={inputClass}
-              />
-            </label>
-            <div className="flex items-end">
-              <SubmitButton className={botonClass}>Agregar</SubmitButton>
+            <div className="grid gap-3 sm:grid-cols-[1fr_2fr_auto]">
+              <label className="grid gap-1.5">
+                <span className={labelClass}>Etiqueta</span>
+                <input
+                  name="label"
+                  placeholder="Windsor"
+                  autoComplete="off"
+                  className={inputClass}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className={labelClass}>api_key de Windsor</span>
+                <input
+                  name="api_key"
+                  type="password"
+                  required
+                  placeholder="••••••"
+                  autoComplete="new-password"
+                  className={inputClass}
+                />
+              </label>
+              <div className="flex items-end">
+                <SubmitButton className={botonClass}>Agregar</SubmitButton>
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <span className={labelClass}>Plataformas que aporta Windsor</span>
+              <ScopePicker vistas={vistasWindsor} />
             </div>
           </ActionForm>
         </div>
@@ -197,9 +213,11 @@ export default async function ConnectionsPage() {
 function TablaConexiones({
   conns,
   conScope = false,
+  vistas = [],
 }: {
   conns: Connection[];
   conScope?: boolean;
+  vistas?: string[];
 }) {
   if (conns.length === 0) {
     return (
@@ -234,14 +252,12 @@ function TablaConexiones({
               <td className="px-3 py-2 font-mono text-label-sm">{mask(c.api_key)}</td>
               {conScope && (
                 <td className="px-3 py-2">
-                  <ActionForm accion={updateScope} className="flex items-center gap-2">
+                  <ActionForm accion={updateScope} className="flex flex-col gap-2">
                     <input type="hidden" name="id" value={c.id} />
-                    <input
-                      name="scope"
-                      defaultValue={c.scope ?? "tiktok,google"}
-                      className="h-9 w-40 rounded-lg border border-outline-variant bg-surface-container-lowest px-2 text-body-md outline-none focus:ring-2 focus:ring-brand/20"
-                    />
-                    <SubmitButton className={botonChico}>Guardar</SubmitButton>
+                    <ScopePicker valorInicial={c.scope} vistas={vistas} />
+                    <SubmitButton className={`${botonChico} self-start`}>
+                      Guardar plataformas
+                    </SubmitButton>
                   </ActionForm>
                 </td>
               )}
