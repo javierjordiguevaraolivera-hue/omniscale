@@ -1,10 +1,21 @@
 import Link from "next/link";
+import {
+  Activity,
+  BadgeDollarSign,
+  Layers,
+  MousePointerClick,
+  Percent,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { todayInTz } from "@/lib/tz";
 import { money, num, sourceLabel } from "@/lib/format";
 import { StatTile } from "@/components/stat-tile";
 import { RunNowButton } from "@/components/run-now-button";
 import { OfferSelect } from "@/components/offer-select";
+import { Panel, PageHeader } from "@/components/panel";
+import { DataTable } from "@/components/data-table";
 import {
   OperationChart,
   MoneyChart,
@@ -104,30 +115,27 @@ export default async function DashboardPage({
       : offers.find((o) => o.offer_id === id)?.name || `Oferta ${id}`;
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Encabezado */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Hoy · {day}</h1>
-          <p className="text-sm text-muted-foreground">
-            Zona horaria {tz}
-            {ultimo
-              ? ` · última captura ${puntos.at(-1)!.hora}`
-              : " · sin capturas todavía"}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <OfferSelect offers={offers} value={offer ?? "all"} basePath="/dashboard" />
-          <RunNowButton />
-        </div>
-      </div>
+    <div className="flex flex-col gap-md">
+      <PageHeader
+        titulo={`Hoy · ${day}`}
+        descripcion={
+          ultimo
+            ? `Zona horaria ${tz} · última captura ${ultimo.hora}`
+            : `Zona horaria ${tz} · sin capturas todavía`
+        }
+      >
+        <OfferSelect offers={offers} value={offer ?? "all"} basePath="/dashboard" />
+        <RunNowButton />
+      </PageHeader>
 
       {puntos.length === 0 && (
-        <div className="rounded-2xl border border-border bg-card p-6 text-sm">
-          <p className="font-medium">Todavía no hay capturas de hoy.</p>
-          <p className="text-muted-foreground mt-1">
+        <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-md text-body-md">
+          <p className="font-semibold text-on-surface">
+            Todavía no hay capturas de hoy.
+          </p>
+          <p className="mt-1 text-on-surface-variant">
             Registra tu API key de Everflow y los tokens de Facebook en{" "}
-            <Link href="/connections" className="underline">
+            <Link href="/connections" className="text-brand-crimson underline">
               Conexiones
             </Link>
             , y usa &ldquo;Actualizar ahora&rdquo; para la primera corrida.
@@ -136,155 +144,152 @@ export default async function DashboardPage({
       )}
 
       {/* KPIs */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
-        <StatTile label="Gasto" value={money(spend)} />
-        <StatTile label="Conversiones" value={num(conversions)} />
-        <StatTile label="Revenue" value={money(revenue)} />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <StatTile label="Gasto" value={money(spend)} icono={<Wallet className="h-5 w-5" />} />
+        <StatTile label="Conversiones" value={num(conversions)} icono={<Activity className="h-5 w-5" />} />
+        <StatTile label="Revenue" value={money(revenue)} icono={<BadgeDollarSign className="h-5 w-5" />} />
         <StatTile
           label="Profit / Pérdida"
           value={money(profit)}
           tone={profit > 0 ? "good" : profit < 0 ? "bad" : "neutral"}
+          icono={<TrendingUp className="h-5 w-5" />}
         />
-        <StatTile
-          label="Costo por conversión"
-          value={money(cpa)}
-          hint={`ROAS ${roas.toFixed(2)}x`}
-        />
+        <StatTile label="Costo por conversión" value={money(cpa)} icono={<Percent className="h-5 w-5" />} />
+        <StatTile label="ROAS" value={`${roas.toFixed(2)}x`} icono={<MousePointerClick className="h-5 w-5" />} />
       </div>
 
       {sinAsignar.length > 0 && (
-        <div className="rounded-2xl border border-[#ec835a] bg-[#fff7f3] p-4 text-sm">
-          <p className="font-medium">
+        <div className="rounded-xl border border-warning bg-[#fff7f3] p-md text-body-md">
+          <p className="font-semibold text-on-surface">
             {sinAsignar.length} cuenta(s) con gasto y sin oferta asignada
           </p>
-          <p className="text-muted-foreground mt-1">
-            Su gasto no se atribuye a ninguna oferta. Asígnalas en la tabla de
-            cuentas de abajo, o agrega <code>oid_&lt;ID&gt;</code> al nombre de la
-            cuenta en Facebook para que se mapee sola.
+          <p className="mt-1 text-on-surface-variant">
+            Su gasto no se atribuye a ninguna oferta. Asígnalas en{" "}
+            <Link href="/accounts" className="text-brand-crimson underline">
+              Cuentas
+            </Link>
+            , o agrega <code>oid_&lt;ID&gt;</code> al nombre de la cuenta en
+            Facebook para que se mapee sola.
           </p>
         </div>
       )}
 
-      {/* Gráfico 1 */}
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="font-semibold">Evolución operativa</h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          Gasto, conversiones y costo por conversión a lo largo del día.
-        </p>
-        <OperationChart data={puntos} />
-      </section>
-
-      {/* Gráfico 2 */}
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="font-semibold">Revenue, gasto y profit</h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          Las tres variables en dólares sobre el mismo eje.
-        </p>
-        <MoneyChart data={puntos} />
-      </section>
-
-      {/* Tabla oferta x plataforma */}
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="font-semibold mb-4">Por oferta y plataforma</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                <th className="py-2 pr-4 font-medium">Oferta</th>
-                <th className="py-2 pr-4 font-medium">Plataforma</th>
-                <th className="py-2 pr-4 font-medium text-right">Clicks</th>
-                <th className="py-2 pr-4 font-medium text-right">Conversiones</th>
-                <th className="py-2 font-medium text-right">Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {offerSource.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-4 text-muted-foreground">
-                    Sin conversiones registradas hoy.
-                  </td>
-                </tr>
-              )}
-              {offerSource.map((r, i) => (
-                <tr key={i} className="border-b border-border last:border-0">
-                  <td className="py-2 pr-4">
-                    {r.offer_name || `Oferta ${r.offer_id}`}
-                    <span className="text-muted-foreground"> · {r.offer_id}</span>
-                  </td>
-                  <td className="py-2 pr-4">{sourceLabel(r.source_id)}</td>
-                  <td className="py-2 pr-4 text-right tabular-nums">
-                    {num(Number(r.clicks))}
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums">
-                    {num(Number(r.conversions))}
-                  </td>
-                  <td className="py-2 text-right tabular-nums">
-                    {money(Number(r.revenue))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <Panel titulo="Evolución operativa" icono={<Activity className="h-5 w-5" />}>
+        <div className="p-md">
+          <p className="mb-md text-label-sm text-on-surface-variant">
+            Gasto, conversiones y costo por conversión a lo largo del día.
+          </p>
+          <OperationChart data={puntos} />
         </div>
-      </section>
+      </Panel>
 
-      {/* Tabla cuentas publicitarias */}
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="font-semibold">Cuentas publicitarias de hoy</h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          La oferta se detecta del nombre (<code>oid_3560</code>). Si la cambias, la
-          data ya guardada no se altera: solo aplica a las capturas siguientes.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                <th className="py-2 pr-4 font-medium">Cuenta</th>
-                <th className="py-2 pr-4 font-medium text-right">Gasto</th>
-                <th className="py-2 font-medium">Oferta asignada</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="py-4 text-muted-foreground">
-                    Sin cuentas capturadas hoy.
-                  </td>
-                </tr>
-              )}
-              {accounts.map((a) => (
-                <tr key={a.account_id} className="border-b border-border last:border-0">
-                  <td className="py-2 pr-4">
-                    {a.account_name || a.account_id}
-                    <span className="block text-xs text-muted-foreground">
-                      {a.account_id}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums">
-                    {money(Number(a.spend))}
-                  </td>
-                  <td className="py-2">
-                    {a.offer_id === null ? (
-                      <span className="text-[#d03b3b] font-medium">
-                        ⚠ Sin configurar
-                      </span>
-                    ) : (
-                      nombreOferta(a.offer_id)
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <Panel titulo="Revenue, gasto y profit" icono={<TrendingUp className="h-5 w-5" />}>
+        <div className="p-md">
+          <p className="mb-md text-label-sm text-on-surface-variant">
+            Las tres variables en dólares sobre el mismo eje.
+          </p>
+          <MoneyChart data={puntos} />
         </div>
-        <p className="text-xs text-muted-foreground mt-4">
-          Para asignar o corregir la oferta de una cuenta, ve a{" "}
-          <Link href="/accounts" className="underline">
-            Cuentas
+      </Panel>
+
+      <DataTable
+        titulo="Por oferta y plataforma"
+        icono={<Layers className="h-5 w-5" />}
+        filas={offerSource}
+        rowKey={(r) => `${r.offer_id}-${r.source_id}`}
+        vacio="Sin conversiones registradas hoy."
+        sustantivo="filas"
+        columnas={[
+          {
+            key: "offer",
+            label: "Oferta",
+            render: (r) => (
+              <>
+                {r.offer_name || `Oferta ${r.offer_id}`}
+                <span className="text-on-surface-variant"> · {r.offer_id}</span>
+              </>
+            ),
+          },
+          {
+            key: "source",
+            label: "Plataforma",
+            render: (r) => sourceLabel(r.source_id),
+          },
+          {
+            key: "clicks",
+            label: "Clicks",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{num(Number(r.clicks))}</span>
+            ),
+          },
+          {
+            key: "cv",
+            label: "Conversiones",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{num(Number(r.conversions))}</span>
+            ),
+          },
+          {
+            key: "revenue",
+            label: "Revenue",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{money(Number(r.revenue))}</span>
+            ),
+          },
+        ]}
+      />
+
+      <DataTable
+        titulo="Cuentas publicitarias de hoy"
+        icono={<Wallet className="h-5 w-5" />}
+        filas={accounts}
+        rowKey={(a) => a.account_id}
+        vacio="Sin cuentas capturadas hoy."
+        sustantivo="cuentas"
+        acciones={
+          <Link
+            href="/accounts"
+            className="rounded-lg border border-outline-variant bg-surface-container-lowest px-sm py-xs text-label-md text-on-surface-variant transition-colors hover:bg-surface-container-low"
+          >
+            Asignar ofertas
           </Link>
-          .
-        </p>
-      </section>
+        }
+        columnas={[
+          {
+            key: "account",
+            label: "Cuenta",
+            render: (a) => (
+              <div>
+                <span>{a.account_name || a.account_id}</span>
+                <span className="block text-label-sm text-on-surface-variant">
+                  {a.account_id}
+                </span>
+              </div>
+            ),
+          },
+          {
+            key: "spend",
+            label: "Gasto",
+            align: "right",
+            render: (a) => (
+              <span className="tabular-nums">{money(Number(a.spend))}</span>
+            ),
+          },
+          {
+            key: "offer",
+            label: "Oferta asignada",
+            render: (a) =>
+              a.offer_id === null ? (
+                <span className="font-semibold text-error">⚠ Sin configurar</span>
+              ) : (
+                nombreOferta(a.offer_id)
+              ),
+          },
+        ]}
+      />
     </div>
   );
 }

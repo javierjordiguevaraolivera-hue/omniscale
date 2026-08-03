@@ -11,7 +11,7 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 218 57% 13%; /* #0f1d36 */
+    --primary: 217 47% 16%; /* #16243d — navy del logo */
     --primary-foreground: 0 0% 100%;
     --secondary: 220 33% 96%; /* #f3f5f9 */
     --secondary-foreground: 217 33% 17%;
@@ -23,7 +23,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 214 32% 91%; /* #e2e8f0 */
     --input: 214 32% 91%;
-    --ring: 218 57% 13%;
+    --ring: 217 47% 16%;
     --chart-1: 218 57% 30%;
     --chart-2: 173 58% 39%;
     --chart-3: 27 87% 55%;

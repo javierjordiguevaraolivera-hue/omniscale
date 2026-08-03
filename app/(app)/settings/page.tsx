@@ -1,8 +1,7 @@
+import { Info, Settings as SettingsIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { updateSettings } from "@/app/actions";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PageHeader, Panel } from "@/components/panel";
 import { todayInTz } from "@/lib/tz";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +17,9 @@ const ZONAS = [
   { tz: "UTC", label: "UTC" },
 ];
 
+const inputClass =
+  "mt-1 h-11 w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 text-body-md text-on-surface outline-none focus:ring-2 focus:ring-brand/20";
+
 export default async function SettingsPage() {
   const supabase = await createClient();
   const { data } = await supabase.from("settings").select("*").eq("id", 1).single();
@@ -26,76 +28,79 @@ export default async function SettingsPage() {
   const retention = data?.retention_days ?? 3;
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-semibold">Ajustes</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Hoy es <strong>{todayInTz(tz)}</strong> según la zona configurada.
-        </p>
-      </div>
+    <div className="flex max-w-3xl flex-col gap-md">
+      <PageHeader
+        titulo="Ajustes"
+        descripcion={`Hoy es ${todayInTz(tz)} según la zona configurada.`}
+      />
 
-      <form
-        action={updateSettings}
-        className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-5"
-      >
-        <div className="grid gap-1.5">
-          <Label htmlFor="timezone">Zona horaria del reporte</Label>
-          <select
-            id="timezone"
-            name="timezone"
-            defaultValue={tz}
-            className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
-          >
-            {ZONAS.map((z) => (
-              <option key={z.tz} value={z.tz}>
-                {z.label} — {z.tz}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            Define dónde empieza y termina el &ldquo;día&rdquo; en todo el sistema.
-          </p>
-        </div>
+      <Panel titulo="Configuración del reporte" icono={<SettingsIcon className="h-5 w-5" />}>
+        <form action={updateSettings} className="flex flex-col gap-md p-md">
+          <label className="block">
+            <span className="text-label-md text-on-surface-variant">
+              Zona horaria del reporte
+            </span>
+            <select name="timezone" defaultValue={tz} className={inputClass}>
+              {ZONAS.map((z) => (
+                <option key={z.tz} value={z.tz}>
+                  {z.label} — {z.tz}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-label-sm text-on-surface-variant">
+              Define dónde empieza y termina el &ldquo;día&rdquo; en todo el sistema.
+            </span>
+          </label>
 
-        <div className="grid gap-1.5">
-          <Label htmlFor="everflow_timezone_id">timezone_id de Everflow</Label>
-          <Input
-            id="everflow_timezone_id"
-            name="everflow_timezone_id"
-            type="number"
-            defaultValue={efId}
-            min={1}
-          />
-          <p className="text-xs text-muted-foreground">
-            Everflow identifica las zonas por número, no por nombre. 67 = New York.
-            Debe coincidir con la zona de arriba para que el corte de día cuadre.
-          </p>
-        </div>
+          <label className="block">
+            <span className="text-label-md text-on-surface-variant">
+              timezone_id de Everflow
+            </span>
+            <input
+              name="everflow_timezone_id"
+              type="number"
+              defaultValue={efId}
+              min={1}
+              className={inputClass}
+            />
+            <span className="mt-1 block text-label-sm text-on-surface-variant">
+              Everflow identifica las zonas por número, no por nombre. 67 = New
+              York. Debe coincidir con la zona de arriba para que el corte de día
+              cuadre.
+            </span>
+          </label>
 
-        <div className="grid gap-1.5">
-          <Label htmlFor="retention_days">Días de snapshots que se conservan</Label>
-          <Input
-            id="retention_days"
-            name="retention_days"
-            type="number"
-            defaultValue={retention}
-            min={1}
-            max={30}
-          />
-          <p className="text-xs text-muted-foreground">
-            Las capturas por minuto se borran pasados estos días. El histórico
-            consolidado (una fila por día y oferta) nunca se borra.
-          </p>
-        </div>
+          <label className="block">
+            <span className="text-label-md text-on-surface-variant">
+              Días de snapshots que se conservan
+            </span>
+            <input
+              name="retention_days"
+              type="number"
+              defaultValue={retention}
+              min={1}
+              max={30}
+              className={inputClass}
+            />
+            <span className="mt-1 block text-label-sm text-on-surface-variant">
+              Las capturas por minuto se borran pasados estos días. El histórico
+              consolidado (una fila por día y oferta) nunca se borra.
+            </span>
+          </label>
 
-        <div>
-          <Button type="submit">Guardar ajustes</Button>
-        </div>
-      </form>
+          <div>
+            <button
+              type="submit"
+              className="h-11 rounded-lg bg-brand px-6 text-label-md text-white transition-opacity hover:opacity-90"
+            >
+              Guardar ajustes
+            </button>
+          </div>
+        </form>
+      </Panel>
 
-      <section className="rounded-2xl border border-border bg-card p-5 text-sm">
-        <h2 className="font-semibold mb-2">Cómo funciona la ingesta</h2>
-        <ul className="list-disc pl-5 flex flex-col gap-1 text-muted-foreground">
+      <Panel titulo="Cómo funciona la ingesta" icono={<Info className="h-5 w-5" />}>
+        <ul className="flex list-disc flex-col gap-1 p-md pl-10 text-body-md text-on-surface-variant">
           <li>Un cron en Vercel corre cada minuto y guarda una captura del día.</li>
           <li>
             Cada captura graba la oferta que tenía la cuenta publicitaria en ese
@@ -106,7 +111,7 @@ export default async function SettingsPage() {
             (gasto, conversiones, revenue, profit).
           </li>
         </ul>
-      </section>
+      </Panel>
     </div>
   );
 }

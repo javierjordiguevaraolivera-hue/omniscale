@@ -1,9 +1,20 @@
+import {
+  Activity,
+  BadgeDollarSign,
+  CalendarRange,
+  MousePointerClick,
+  Percent,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { todayInTz, shiftDay } from "@/lib/tz";
 import { money, num } from "@/lib/format";
 import { StatTile } from "@/components/stat-tile";
 import { OfferSelect } from "@/components/offer-select";
 import { RangeTabs } from "@/components/range-tabs";
+import { Panel, PageHeader } from "@/components/panel";
+import { DataTable } from "@/components/data-table";
 import { HistoryChart, type HistoryPoint } from "@/components/charts/history-chart";
 
 export const dynamic = "force-dynamic";
@@ -84,111 +95,110 @@ export default async function HistoryPage({
   const roas = total.spend > 0 ? total.revenue / total.spend : 0;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Histórico</h1>
-          <p className="text-sm text-muted-foreground">
-            {desde} → {hasta} · una fila consolidada por día y oferta
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <RangeTabs days={days} offer={sp.offer ?? "all"} />
-          <OfferSelect
-            offers={offers}
-            value={sp.offer ?? "all"}
-            basePath="/history"
-            extraParams={{ days: String(days) }}
-          />
-        </div>
-      </div>
+    <div className="flex flex-col gap-md">
+      <PageHeader
+        titulo="Histórico"
+        descripcion={`${desde} → ${hasta} · una fila consolidada por día y oferta`}
+      >
+        <RangeTabs days={days} offer={sp.offer ?? "all"} />
+        <OfferSelect
+          offers={offers}
+          value={sp.offer ?? "all"}
+          basePath="/history"
+          extraParams={{ days: String(days) }}
+        />
+      </PageHeader>
 
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
-        <StatTile label="Gasto" value={money(total.spend)} />
-        <StatTile label="Conversiones" value={num(total.conversions)} />
-        <StatTile label="Revenue" value={money(total.revenue)} />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <StatTile label="Gasto" value={money(total.spend)} icono={<Wallet className="h-5 w-5" />} />
+        <StatTile label="Conversiones" value={num(total.conversions)} icono={<Activity className="h-5 w-5" />} />
+        <StatTile label="Revenue" value={money(total.revenue)} icono={<BadgeDollarSign className="h-5 w-5" />} />
         <StatTile
           label="Profit / Pérdida"
           value={money(total.profit)}
           tone={total.profit > 0 ? "good" : total.profit < 0 ? "bad" : "neutral"}
+          icono={<TrendingUp className="h-5 w-5" />}
         />
-        <StatTile
-          label="Costo por conversión"
-          value={money(cpa)}
-          hint={`ROAS ${roas.toFixed(2)}x`}
-        />
+        <StatTile label="Costo por conversión" value={money(cpa)} icono={<Percent className="h-5 w-5" />} />
+        <StatTile label="ROAS" value={`${roas.toFixed(2)}x`} icono={<MousePointerClick className="h-5 w-5" />} />
       </div>
 
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="font-semibold">Profit por día</h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          Azul = ganancia, rojo = pérdida. Pasa el cursor para ver revenue y gasto.
-        </p>
-        {serie.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6">
-            Todavía no hay días consolidados en este rango.
+      <Panel titulo="Profit por día" icono={<CalendarRange className="h-5 w-5" />}>
+        <div className="p-md">
+          <p className="mb-md text-label-sm text-on-surface-variant">
+            Azul = ganancia, rojo = pérdida. Pasa el cursor para ver revenue y gasto.
           </p>
-        ) : (
-          <HistoryChart data={serie} />
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="font-semibold mb-4">Detalle por día y oferta</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                <th className="py-2 pr-4 font-medium">Día</th>
-                <th className="py-2 pr-4 font-medium">Oferta</th>
-                <th className="py-2 pr-4 font-medium text-right">Gasto</th>
-                <th className="py-2 pr-4 font-medium text-right">Conversiones</th>
-                <th className="py-2 pr-4 font-medium text-right">Revenue</th>
-                <th className="py-2 font-medium text-right">Profit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-4 text-muted-foreground">
-                    Sin datos consolidados en este rango.
-                  </td>
-                </tr>
-              )}
-              {[...rows].reverse().map((r) => (
-                <tr
-                  key={`${r.day}-${r.offer_id}`}
-                  className="border-b border-border last:border-0"
-                >
-                  <td className="py-2 pr-4 tabular-nums">{r.day}</td>
-                  <td className="py-2 pr-4">
-                    {r.offer_id === 0
-                      ? "Sin asignar"
-                      : r.offer_name || `Oferta ${r.offer_id}`}
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums">
-                    {money(Number(r.spend))}
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums">
-                    {num(Number(r.conversions))}
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums">
-                    {money(Number(r.revenue))}
-                  </td>
-                  <td
-                    className="py-2 text-right tabular-nums font-medium"
-                    style={{
-                      color: Number(r.profit) >= 0 ? "#006300" : "#d03b3b",
-                    }}
-                  >
-                    {money(Number(r.profit))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {serie.length === 0 ? (
+            <p className="py-lg text-body-md text-on-surface-variant">
+              Todavía no hay días consolidados en este rango.
+            </p>
+          ) : (
+            <HistoryChart data={serie} />
+          )}
         </div>
-      </section>
+      </Panel>
+
+      <DataTable
+        titulo="Detalle por día y oferta"
+        icono={<CalendarRange className="h-5 w-5" />}
+        filas={[...rows].reverse()}
+        rowKey={(r) => `${r.day}-${r.offer_id}`}
+        vacio="Sin datos consolidados en este rango."
+        sustantivo="filas"
+        columnas={[
+          {
+            key: "day",
+            label: "Día",
+            render: (r) => <span className="tabular-nums">{r.day}</span>,
+          },
+          {
+            key: "offer",
+            label: "Oferta",
+            render: (r) =>
+              r.offer_id === 0
+                ? "Sin asignar"
+                : r.offer_name || `Oferta ${r.offer_id}`,
+          },
+          {
+            key: "spend",
+            label: "Gasto",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{money(Number(r.spend))}</span>
+            ),
+          },
+          {
+            key: "cv",
+            label: "Conversiones",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{num(Number(r.conversions))}</span>
+            ),
+          },
+          {
+            key: "revenue",
+            label: "Revenue",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{money(Number(r.revenue))}</span>
+            ),
+          },
+          {
+            key: "profit",
+            label: "Profit",
+            align: "right",
+            render: (r) => (
+              <span
+                className={`font-semibold tabular-nums ${
+                  Number(r.profit) >= 0 ? "text-success" : "text-error"
+                }`}
+              >
+                {money(Number(r.profit))}
+              </span>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

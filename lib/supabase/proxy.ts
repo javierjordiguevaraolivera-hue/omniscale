@@ -52,6 +52,7 @@ export async function updateSession(request: NextRequest) {
     "/terms-and-conditions",
     "/privacy-policy",
     "/data-deletion-policy",
+    "/demo", // solo datos inventados; se puede borrar la carpeta app/demo
   ];
   if (
     !user &&

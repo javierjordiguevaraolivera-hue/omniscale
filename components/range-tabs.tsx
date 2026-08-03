@@ -9,17 +9,17 @@ const RANGOS = [
 
 export function RangeTabs({ days, offer }: { days: number; offer: string }) {
   return (
-    <div className="flex items-center gap-1 rounded-xl border border-border bg-background p-1">
+    <div className="flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest p-1">
       {RANGOS.map((r) => {
         const activo = r.days === days;
         return (
           <Link
             key={r.days}
             href={`/history?days=${r.days}&offer=${offer}`}
-            className={`px-3 py-1 rounded-lg text-xs font-medium ${
+            className={`rounded-md px-3 py-1 text-label-md transition-colors ${
               activo
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-secondary"
+                ? "bg-brand text-white"
+                : "text-on-surface-variant hover:bg-surface-container-low hover:text-brand"
             }`}
           >
             {r.label}

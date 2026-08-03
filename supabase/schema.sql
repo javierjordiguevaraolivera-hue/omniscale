@@ -149,10 +149,31 @@ alter table snap_offer_source enable row level security;
 alter table snap_account enable row level security;
 alter table daily_summary enable row level security;
 
+drop policy if exists "auth read settings" on settings;
 create policy "auth read settings" on settings for select to authenticated using (true);
+
+drop policy if exists "auth read connections" on connections;
 create policy "auth read connections" on connections for select to authenticated using (true);
+
+drop policy if exists "auth read offers" on offers;
 create policy "auth read offers" on offers for select to authenticated using (true);
+
+drop policy if exists "auth read ad_accounts" on ad_accounts;
 create policy "auth read ad_accounts" on ad_accounts for select to authenticated using (true);
+
+drop policy if exists "auth read snap_offer_source" on snap_offer_source;
 create policy "auth read snap_offer_source" on snap_offer_source for select to authenticated using (true);
+
+drop policy if exists "auth read snap_account" on snap_account;
 create policy "auth read snap_account" on snap_account for select to authenticated using (true);
+
+drop policy if exists "auth read daily_summary" on daily_summary;
 create policy "auth read daily_summary" on daily_summary for select to authenticated using (true);
+
+-- Permite que el rol de la API llame a las funciones de lectura.
+grant execute on function intraday_series(date, int) to authenticated, service_role;
+grant execute on function latest_offer_source(date) to authenticated, service_role;
+grant execute on function latest_accounts(date) to authenticated, service_role;
+
+-- Refresca la caché de PostgREST para que las funciones nuevas se vean al instante.
+notify pgrst, 'reload schema';

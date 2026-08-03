@@ -15,10 +15,10 @@ export function OfferSelect({
 }) {
   const router = useRouter();
   return (
-    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+    <label className="flex items-center gap-2 text-label-md text-on-surface-variant">
       Oferta
       <select
-        className="h-9 rounded-lg border border-border bg-background px-2 text-sm text-foreground"
+        className="h-10 rounded-lg border border-outline-variant bg-surface-container-lowest px-2 text-body-md text-on-surface outline-none focus:ring-2 focus:ring-brand/20"
         value={value}
         onChange={(e) => {
           const params = new URLSearchParams({

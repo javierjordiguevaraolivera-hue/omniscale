@@ -1,51 +1,42 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
 import { Suspense } from "react";
+import { AuthShell } from "@/components/auth-shell";
 
-async function ErrorContent({
+export const metadata = { title: "Error | OMNI Scale" };
+
+async function DetalleError({
   searchParams,
 }: {
-  searchParams: Promise<{ error: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const params = await searchParams;
-
   return (
-    <>
-      {params?.error ? (
-        <p className="text-sm text-muted-foreground">
-          Code error: {params.error}
-        </p>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          An unspecified error occurred.
-        </p>
-      )}
-    </>
+    <p className="text-sm text-muted-foreground">
+      {params?.error
+        ? `Código del error: ${params.error}`
+        : "Ocurrió un error no especificado."}
+    </p>
   );
 }
 
 export default function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ error: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">
-                Sorry, something went wrong.
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Suspense>
-                <ErrorContent searchParams={searchParams} />
-              </Suspense>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
+    <AuthShell
+      titulo="Algo salió mal"
+      subtitulo="No pudimos completar la operación"
+      pie={
+        <Link href="/auth/login" className="font-medium text-foreground underline">
+          Volver a iniciar sesión
+        </Link>
+      }
+    >
+      <Suspense>
+        <DetalleError searchParams={searchParams} />
+      </Suspense>
+    </AuthShell>
   );
 }
