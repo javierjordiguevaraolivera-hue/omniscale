@@ -47,11 +47,18 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
+  const publicPaths = [
+    "/",
+    "/terms-and-conditions",
+    "/privacy-policy",
+    "/data-deletion-policy",
+  ];
   if (
-    request.nextUrl.pathname !== "/" &&
     !user &&
+    !publicPaths.includes(request.nextUrl.pathname) &&
     !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth")
+    !request.nextUrl.pathname.startsWith("/auth") &&
+    !request.nextUrl.pathname.startsWith("/api/cron")
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();

@@ -52,12 +52,25 @@ consolidado no se borra nunca y ocupa muy poco.
    - `SUPABASE_SERVICE_ROLE_KEY` — solo servidor, nunca con prefijo `NEXT_PUBLIC`
    - `CRON_SECRET` — cualquier cadena aleatoria; con ella presente, Vercel firma
      las llamadas del cron y el endpoint rechaza lo demás
-3. **Crear el usuario** en `/auth/sign-up` (o desde Authentication en Supabase) y
+3. **URLs de autenticación** en Supabase → Authentication → URL Configuration.
+   Dominio de producción: **omniscale.pro**.
+   - Site URL: `https://omniscale.pro`
+   - Redirect URLs:
+     ```
+     https://omniscale.pro/**
+     https://www.omniscale.pro/**
+     https://*.vercel.app/**
+     http://localhost:3030/**
+     ```
+   Los comodines cubren las tres rutas que usa la app: `/dashboard` (confirmación
+   de registro), `/auth/update-password` (recuperar contraseña) y `/auth/confirm`
+   (verificación por token).
+4. **Crear el usuario** en `/auth/sign-up` (o desde Authentication en Supabase) y
    luego, para que nadie más se registre, desactivar *Allow new users to sign up*
    en Supabase → Authentication → Providers → Email.
-4. **Registrar credenciales** en `/connections`: la API key de Everflow y un token
+5. **Registrar credenciales** en `/connections`: la API key de Everflow y un token
    de Facebook por cada app / VM. Pulsa **Actualizar ahora** para la primera carga.
-5. **Revisar `/accounts`**: asignar oferta a las cuentas que no traigan `oid_` en
+6. **Revisar `/accounts`**: asignar oferta a las cuentas que no traigan `oid_` en
    el nombre.
 
 El cron ya viene definido en `vercel.json` (`* * * * *`). Requiere plan Pro; en
