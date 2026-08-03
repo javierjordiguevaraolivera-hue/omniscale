@@ -46,12 +46,12 @@ export function Sidebar({ email }: { email: string }) {
       <div className="mb-xl px-sm">
         <Link href="/dashboard" className="block">
           <Image
-            src="/omniscale-logo.png"
+            src="/omni-logo.png"
             alt="OMNI Scale"
-            width={210}
-            height={116}
+            width={251}
+            height={69}
             priority
-            className="h-auto w-[120px]"
+            className="h-8 w-auto"
           />
         </Link>
         <p className="mt-xs text-label-sm text-on-surface-variant opacity-70">

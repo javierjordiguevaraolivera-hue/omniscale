@@ -1,6 +1,7 @@
 export type FacebookAccountSpend = {
   account_id: string; // "act_123..."
   name: string;
+  clicks: number;
   spend: number;
 };
 
@@ -10,12 +11,15 @@ type FbAccountNode = {
   id?: string;
   account_id?: string;
   name?: string;
-  insights?: { data?: { spend?: string }[] };
+  insights?: { data?: { spend?: string; clicks?: string }[] };
 };
 
 /**
- * Gasto del día por cuenta publicitaria para un token (una app / BM).
- * Nota: Facebook interpreta el rango en la zona horaria de CADA cuenta publicitaria.
+ * Gasto y clicks del día por cuenta publicitaria para un token (una app / BM).
+ * Nivel cuenta: la convención de mapeo en Facebook es `oid_XXXX` en el NOMBRE
+ * DE LA CUENTA, así que no hace falta bajar a campaña.
+ *
+ * Nota: Facebook interpreta el rango en la zona horaria de CADA cuenta.
  */
 export async function fetchFacebookSpend(
   accessToken: string,
@@ -24,7 +28,7 @@ export async function fetchFacebookSpend(
 ): Promise<FacebookAccountSpend[]> {
   const timeRange = JSON.stringify({ since, until });
   const params = new URLSearchParams({
-    fields: `name,account_id,insights.time_range(${timeRange}){spend}`,
+    fields: `name,account_id,insights.time_range(${timeRange}){spend,clicks}`,
     limit: "100",
     access_token: accessToken,
   });
@@ -41,20 +45,16 @@ export async function fetchFacebookSpend(
       throw new Error(`Facebook: ${msg}`);
     }
     for (const acc of (body.data ?? []) as FbAccountNode[]) {
+      const ins = acc.insights?.data?.[0];
       accounts.push({
         account_id: acc.id ?? `act_${acc.account_id}`,
         name: acc.name ?? "",
-        spend: Number(acc.insights?.data?.[0]?.spend ?? 0),
+        clicks: Number(ins?.clicks ?? 0) || 0,
+        spend: Number(ins?.spend ?? 0) || 0,
       });
     }
     url = body.paging?.next ?? null;
   }
 
   return accounts;
-}
-
-/** Extrae el offer ID del nombre de la cuenta: "002 - auto hs oid_3560" -> 3560 */
-export function parseOfferIdFromName(name: string): number | null {
-  const m = /oid[_\s-]?(\d+)/i.exec(name);
-  return m ? Number(m[1]) : null;
 }

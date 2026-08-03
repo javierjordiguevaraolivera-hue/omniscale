@@ -5,12 +5,13 @@ import {
   Layers,
   MousePointerClick,
   Percent,
+  Radio,
   TrendingUp,
   Wallet,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { todayInTz } from "@/lib/tz";
-import { money, num, sourceLabel } from "@/lib/format";
+import { money, num, sourceLabel, platformLabel } from "@/lib/format";
 import { StatTile } from "@/components/stat-tile";
 import { RunNowButton } from "@/components/run-now-button";
 import { OfferSelect } from "@/components/offer-select";
@@ -38,11 +39,13 @@ type OfferSourceRow = {
   conversions: number;
   revenue: number;
 };
-type AccountRow = {
-  account_id: string;
+type SpendRow = {
+  datasource: string;
   account_name: string;
-  offer_id: number | null;
+  campaign: string;
+  clicks: number;
   spend: number;
+  offer_id: number | null;
 };
 type Offer = { offer_id: number; name: string };
 
@@ -63,20 +66,20 @@ export default async function DashboardPage({
   const tz = settings?.timezone ?? "America/New_York";
   const day = todayInTz(tz);
 
-  const [seriesRes, osRes, accRes, offersRes] = await Promise.all([
+  const [seriesRes, osRes, spendRes, offersRes] = await Promise.all([
     supabase.rpc("intraday_series", { p_day: day, p_offer: offerFilter }),
     supabase.rpc("latest_offer_source", { p_day: day }),
-    supabase.rpc("latest_accounts", { p_day: day }),
+    supabase.rpc("latest_spend", { p_day: day }),
     supabase.from("offers").select("offer_id,name").order("offer_id"),
   ]);
 
   const series = (seriesRes.data ?? []) as SeriesRow[];
   const offers = (offersRes.data ?? []) as Offer[];
   let offerSource = (osRes.data ?? []) as OfferSourceRow[];
-  let accounts = (accRes.data ?? []) as AccountRow[];
+  let spendRows = (spendRes.data ?? []) as SpendRow[];
   if (offerFilter !== null) {
     offerSource = offerSource.filter((r) => r.offer_id === offerFilter);
-    accounts = accounts.filter((r) => r.offer_id === offerFilter);
+    spendRows = spendRows.filter((r) => r.offer_id === offerFilter);
   }
 
   const puntos: Point[] = series.map((r) => {
@@ -107,12 +110,45 @@ export default async function DashboardPage({
   const profit = revenue - spend;
   const cpa = conversions > 0 ? spend / conversions : 0;
   const roas = spend > 0 ? revenue / spend : 0;
-  const sinAsignar = accounts.filter((a) => a.offer_id === null && a.spend > 0);
+  const sinAsignar = spendRows.filter(
+    (r) => r.offer_id === null && Number(r.spend) > 0,
+  );
 
   const nombreOferta = (id: number | null) =>
     id === null
       ? "Sin asignar"
       : offers.find((o) => o.offer_id === id)?.name || `Oferta ${id}`;
+
+  // --- Cruce por plataforma: gasto (Windsor) vs revenue (Everflow) --------
+  type FilaPlataforma = {
+    plataforma: string;
+    spend: number;
+    clicks: number;
+    conversions: number;
+    revenue: number;
+  };
+  const porPlataforma = new Map<string, FilaPlataforma>();
+  const bucket = (plataforma: string) => {
+    let b = porPlataforma.get(plataforma);
+    if (!b) {
+      b = { plataforma, spend: 0, clicks: 0, conversions: 0, revenue: 0 };
+      porPlataforma.set(plataforma, b);
+    }
+    return b;
+  };
+  for (const r of spendRows) {
+    const b = bucket(platformLabel(r.datasource));
+    b.spend += Number(r.spend);
+    b.clicks += Number(r.clicks);
+  }
+  for (const r of offerSource) {
+    const b = bucket(sourceLabel(r.source_id));
+    b.conversions += Number(r.conversions);
+    b.revenue += Number(r.revenue);
+  }
+  const plataformas = [...porPlataforma.values()].sort(
+    (a, b) => b.spend + b.revenue - (a.spend + a.revenue),
+  );
 
   return (
     <div className="flex flex-col gap-md">
@@ -134,7 +170,7 @@ export default async function DashboardPage({
             Todavía no hay capturas de hoy.
           </p>
           <p className="mt-1 text-on-surface-variant">
-            Registra tu API key de Everflow y los tokens de Facebook en{" "}
+            Registra tu API key de Everflow y la de Windsor en{" "}
             <Link href="/connections" className="text-brand-crimson underline">
               Conexiones
             </Link>
@@ -145,31 +181,31 @@ export default async function DashboardPage({
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="Gasto" value={money(spend)} icono={<Wallet className="h-5 w-5" />} />
-        <StatTile label="Conversiones" value={num(conversions)} icono={<Activity className="h-5 w-5" />} />
-        <StatTile label="Revenue" value={money(revenue)} icono={<BadgeDollarSign className="h-5 w-5" />} />
+        <StatTile label="Gasto" value={money(spend)} icono={<Wallet />} />
+        <StatTile label="Conversiones" value={num(conversions)} icono={<Activity />} />
+        <StatTile label="Revenue" value={money(revenue)} icono={<BadgeDollarSign />} />
         <StatTile
           label="Profit / Pérdida"
           value={money(profit)}
           tone={profit > 0 ? "good" : profit < 0 ? "bad" : "neutral"}
-          icono={<TrendingUp className="h-5 w-5" />}
+          icono={<TrendingUp />}
         />
-        <StatTile label="Costo por conversión" value={money(cpa)} icono={<Percent className="h-5 w-5" />} />
-        <StatTile label="ROAS" value={`${roas.toFixed(2)}x`} icono={<MousePointerClick className="h-5 w-5" />} />
+        <StatTile label="Costo por conversión" value={money(cpa)} icono={<Percent />} />
+        <StatTile label="ROAS" value={`${roas.toFixed(2)}x`} icono={<MousePointerClick />} />
       </div>
 
       {sinAsignar.length > 0 && (
         <div className="rounded-xl border border-warning bg-[#fff7f3] p-md text-body-md">
           <p className="font-semibold text-on-surface">
-            {sinAsignar.length} cuenta(s) con gasto y sin oferta asignada
+            {sinAsignar.length} campaña(s) con gasto y sin oferta asignada
           </p>
           <p className="mt-1 text-on-surface-variant">
             Su gasto no se atribuye a ninguna oferta. Asígnalas en{" "}
             <Link href="/accounts" className="text-brand-crimson underline">
               Cuentas
             </Link>
-            , o agrega <code>oid_&lt;ID&gt;</code> al nombre de la cuenta en
-            Facebook para que se mapee sola.
+            , o escribe <code>oid_&lt;ID&gt;</code> en el nombre de la campaña para
+            que se mapee sola.
           </p>
         </div>
       )}
@@ -191,6 +227,67 @@ export default async function DashboardPage({
           <MoneyChart data={puntos} />
         </div>
       </Panel>
+
+      <DataTable
+        titulo="Resumen por plataforma"
+        icono={<Radio className="h-5 w-5" />}
+        filas={plataformas}
+        rowKey={(r) => r.plataforma}
+        vacio="Sin datos de hoy."
+        sustantivo="plataformas"
+        columnas={[
+          { key: "plat", label: "Plataforma", render: (r) => r.plataforma },
+          {
+            key: "spend",
+            label: "Gasto",
+            align: "right",
+            render: (r) => <span className="tabular-nums">{money(r.spend)}</span>,
+          },
+          {
+            key: "clicks",
+            label: "Clicks",
+            align: "right",
+            render: (r) => <span className="tabular-nums">{num(r.clicks)}</span>,
+          },
+          {
+            key: "cv",
+            label: "Conversiones",
+            align: "right",
+            render: (r) => <span className="tabular-nums">{num(r.conversions)}</span>,
+          },
+          {
+            key: "revenue",
+            label: "Revenue",
+            align: "right",
+            render: (r) => <span className="tabular-nums">{money(r.revenue)}</span>,
+          },
+          {
+            key: "cpa",
+            label: "CPA",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">
+                {r.conversions > 0 ? money(r.spend / r.conversions) : "—"}
+              </span>
+            ),
+          },
+          {
+            key: "profit",
+            label: "Profit",
+            align: "right",
+            render: (r) => {
+              const p = r.revenue - r.spend;
+              return (
+                <span
+                  className={`font-semibold tabular-nums ${p >= 0 ? "text-success" : "text-error"}`}
+                >
+                  {money(p)}
+                </span>
+              );
+            },
+          },
+        ]}
+      />
 
       <DataTable
         titulo="Por oferta y plataforma"
@@ -243,12 +340,12 @@ export default async function DashboardPage({
       />
 
       <DataTable
-        titulo="Cuentas publicitarias de hoy"
+        titulo="Gasto por cuenta y campaña"
         icono={<Wallet className="h-5 w-5" />}
-        filas={accounts}
-        rowKey={(a) => a.account_id}
-        vacio="Sin cuentas capturadas hoy."
-        sustantivo="cuentas"
+        filas={spendRows}
+        rowKey={(r) => `${r.datasource}|${r.account_name}|${r.campaign}`}
+        vacio="Sin gasto capturado hoy."
+        sustantivo="campañas"
         acciones={
           <Link
             href="/accounts"
@@ -259,33 +356,44 @@ export default async function DashboardPage({
         }
         columnas={[
           {
-            key: "account",
+            key: "plat",
+            label: "Plataforma",
+            render: (r) => platformLabel(r.datasource),
+          },
+          {
+            key: "cuenta",
             label: "Cuenta",
-            render: (a) => (
-              <div>
-                <span>{a.account_name || a.account_id}</span>
-                <span className="block text-label-sm text-on-surface-variant">
-                  {a.account_id}
-                </span>
-              </div>
+            render: (r) => r.account_name || "—",
+          },
+          {
+            key: "campana",
+            label: "Campaña",
+            render: (r) => r.campaign || "—",
+          },
+          {
+            key: "clicks",
+            label: "Clicks",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{num(Number(r.clicks))}</span>
             ),
           },
           {
             key: "spend",
             label: "Gasto",
             align: "right",
-            render: (a) => (
-              <span className="tabular-nums">{money(Number(a.spend))}</span>
+            render: (r) => (
+              <span className="tabular-nums">{money(Number(r.spend))}</span>
             ),
           },
           {
             key: "offer",
             label: "Oferta asignada",
-            render: (a) =>
-              a.offer_id === null ? (
+            render: (r) =>
+              r.offer_id === null ? (
                 <span className="font-semibold text-error">⚠ Sin configurar</span>
               ) : (
-                nombreOferta(a.offer_id)
+                nombreOferta(r.offer_id)
               ),
           },
         ]}

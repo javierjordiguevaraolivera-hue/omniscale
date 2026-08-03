@@ -1,7 +1,13 @@
 -- ============================================================
 -- OMNI Scale - Esquema de base de datos
 -- Ejecutar completo en el SQL Editor del proyecto de Supabase.
+-- Es re-ejecutable: se puede volver a pegar tal cual sin que dé errores.
 -- ============================================================
+
+-- Tablas de la primera versión (gasto vía tokens de Facebook). Ahora el gasto
+-- entra por Windsor.ai con plataforma + cuenta + campaña, así que sobran.
+drop table if exists snap_account cascade;
+drop table if exists ad_accounts cascade;
 
 -- Configuración global (una sola fila, id = 1)
 create table if not exists settings (
@@ -14,17 +20,29 @@ create table if not exists settings (
 
 insert into settings (id) values (1) on conflict (id) do nothing;
 
--- Credenciales de las plataformas (Everflow API key, tokens de Facebook, etc.)
+-- Credenciales: Everflow (revenue), tokens de Facebook (gasto por cuenta) y
+-- Windsor.ai (gasto por campaña de las plataformas que indique `scope`).
 create table if not exists connections (
   id uuid primary key default gen_random_uuid(),
-  platform text not null check (platform in ('everflow', 'facebook', 'tiktok', 'google')),
+  platform text not null,
   label text not null default '',
   api_key text not null,
+  -- Solo para Windsor: plataformas que aporta, separadas por coma
+  -- (por defecto 'tiktok,google'; '*' = todas). Evita duplicar el gasto de
+  -- Facebook, que entra por su propio token.
+  scope text,
   active boolean not null default true,
   last_ok_at timestamptz,
   last_error text,
   created_at timestamptz not null default now()
 );
+
+alter table connections add column if not exists scope text;
+
+alter table connections drop constraint if exists connections_platform_check;
+alter table connections
+  add constraint connections_platform_check
+  check (platform in ('everflow', 'facebook', 'windsor'));
 
 -- Catálogo de ofertas (se puebla solo desde Everflow)
 create table if not exists offers (
@@ -33,19 +51,21 @@ create table if not exists offers (
   updated_at timestamptz not null default now()
 );
 
--- Cuentas publicitarias descubiertas en Facebook.
--- offer_id es el mapeo ACTUAL (auto vía "oid_XXXX" en el nombre, o manual).
-create table if not exists ad_accounts (
-  account_id text primary key,
-  name text not null default '',
-  connection_id uuid references connections(id) on delete set null,
+-- Mapeo plataforma × cuenta × campaña → oferta. `campaign` vacío = regla a
+-- nivel de cuenta. offer_id null = pendiente de configurar.
+create table if not exists spend_map (
+  datasource text not null,
+  account_name text not null,
+  campaign text not null default '',
   offer_id int,
   auto_mapped boolean not null default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  origen text not null default 'sin-configurar',
+  first_seen timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (datasource, account_name, campaign)
 );
 
--- Snapshot intradía: conversiones/revenue por oferta x source (Everflow)
+-- Snapshot intradía: conversiones/revenue por oferta × source (Everflow)
 create table if not exists snap_offer_source (
   id bigint generated always as identity primary key,
   captured_at timestamptz not null,
@@ -60,18 +80,20 @@ create table if not exists snap_offer_source (
 );
 create index if not exists idx_sos_day_captured on snap_offer_source (day, captured_at);
 
--- Snapshot intradía: gasto por cuenta publicitaria (Facebook).
+-- Snapshot intradía: gasto por plataforma × cuenta × campaña (Windsor).
 -- offer_id queda CONGELADO al momento de la captura (efecto screenshot).
-create table if not exists snap_account (
+create table if not exists snap_spend (
   id bigint generated always as identity primary key,
   captured_at timestamptz not null,
   day date not null,
-  account_id text not null,
+  datasource text not null,
   account_name text not null default '',
-  offer_id int,
-  spend numeric not null default 0
+  campaign text not null default '',
+  clicks numeric not null default 0,
+  spend numeric not null default 0,
+  offer_id int
 );
-create index if not exists idx_sa_day_captured on snap_account (day, captured_at);
+create index if not exists idx_ss_day_captured on snap_spend (day, captured_at);
 
 -- Resumen histórico: una fila por día x oferta. offer_id = 0 agrupa el gasto sin oferta asignada.
 create table if not exists daily_summary (
@@ -95,10 +117,10 @@ create or replace function intraday_series(p_day date, p_offer int default null)
 returns table (captured_at timestamptz, spend numeric, conversions numeric, revenue numeric)
 language sql stable as $$
   with s as (
-    select sa.captured_at, sum(sa.spend) as spend
-    from snap_account sa
-    where sa.day = p_day and (p_offer is null or sa.offer_id = p_offer)
-    group by sa.captured_at
+    select ss.captured_at, sum(ss.spend) as spend
+    from snap_spend ss
+    where ss.day = p_day and (p_offer is null or ss.offer_id = p_offer)
+    group by ss.captured_at
   ),
   c as (
     select so.captured_at, sum(so.conversions) as conversions, sum(so.revenue) as revenue
@@ -116,7 +138,7 @@ language sql stable as $$
   order by 1;
 $$;
 
--- Última captura del día: filas oferta x source
+-- Última captura del día: filas oferta x source (Everflow)
 create or replace function latest_offer_source(p_day date)
 returns setof snap_offer_source
 language sql stable as $$
@@ -126,13 +148,13 @@ language sql stable as $$
   order by revenue desc;
 $$;
 
--- Última captura del día: filas por cuenta publicitaria
-create or replace function latest_accounts(p_day date)
-returns setof snap_account
+-- Última captura del día: filas de gasto (plataforma x cuenta x campaña)
+create or replace function latest_spend(p_day date)
+returns setof snap_spend
 language sql stable as $$
-  select * from snap_account
+  select * from snap_spend
   where day = p_day
-    and captured_at = (select max(captured_at) from snap_account where day = p_day)
+    and captured_at = (select max(captured_at) from snap_spend where day = p_day)
   order by spend desc;
 $$;
 
@@ -144,9 +166,9 @@ $$;
 alter table settings enable row level security;
 alter table connections enable row level security;
 alter table offers enable row level security;
-alter table ad_accounts enable row level security;
+alter table spend_map enable row level security;
 alter table snap_offer_source enable row level security;
-alter table snap_account enable row level security;
+alter table snap_spend enable row level security;
 alter table daily_summary enable row level security;
 
 drop policy if exists "auth read settings" on settings;
@@ -158,14 +180,14 @@ create policy "auth read connections" on connections for select to authenticated
 drop policy if exists "auth read offers" on offers;
 create policy "auth read offers" on offers for select to authenticated using (true);
 
-drop policy if exists "auth read ad_accounts" on ad_accounts;
-create policy "auth read ad_accounts" on ad_accounts for select to authenticated using (true);
+drop policy if exists "auth read spend_map" on spend_map;
+create policy "auth read spend_map" on spend_map for select to authenticated using (true);
 
 drop policy if exists "auth read snap_offer_source" on snap_offer_source;
 create policy "auth read snap_offer_source" on snap_offer_source for select to authenticated using (true);
 
-drop policy if exists "auth read snap_account" on snap_account;
-create policy "auth read snap_account" on snap_account for select to authenticated using (true);
+drop policy if exists "auth read snap_spend" on snap_spend;
+create policy "auth read snap_spend" on snap_spend for select to authenticated using (true);
 
 drop policy if exists "auth read daily_summary" on daily_summary;
 create policy "auth read daily_summary" on daily_summary for select to authenticated using (true);
@@ -173,7 +195,7 @@ create policy "auth read daily_summary" on daily_summary for select to authentic
 -- Permite que el rol de la API llame a las funciones de lectura.
 grant execute on function intraday_series(date, int) to authenticated, service_role;
 grant execute on function latest_offer_source(date) to authenticated, service_role;
-grant execute on function latest_accounts(date) to authenticated, service_role;
+grant execute on function latest_spend(date) to authenticated, service_role;
 
--- Refresca la caché de PostgREST para que las funciones nuevas se vean al instante.
+-- Refresca la caché de PostgREST para que lo nuevo se vea al instante.
 notify pgrst, 'reload schema';

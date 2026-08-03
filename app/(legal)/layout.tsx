@@ -12,11 +12,11 @@ export default function LegalLayout({
         <div className="max-w-3xl mx-auto px-5 h-16 flex items-center">
           <Link href="/">
             <Image
-              src="/omniscale-logo.png"
+              src="/omni-logo.png"
               alt="OMNI Scale"
-              width={112}
-              height={62}
-              className="h-9 w-auto"
+              width={251}
+              height={69}
+              className="h-8 w-auto"
             />
           </Link>
         </div>

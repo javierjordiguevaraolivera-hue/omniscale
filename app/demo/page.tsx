@@ -5,6 +5,7 @@ import {
   Layers,
   MousePointerClick,
   Percent,
+  Radio,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -68,19 +69,36 @@ const porOferta: FilaOferta[] = [
   { offer: "Gastos Finales", offerId: 4690, source: "Desconocido", clicks: 190, cv: 1, revenue: 46 },
 ];
 
-type FilaCuenta = {
-  id: string;
-  nombre: string;
+type FilaGasto = {
+  plataforma: string;
+  cuenta: string;
+  campana: string;
+  clicks: number;
   spend: number;
   oferta: string | null;
-  auto: boolean;
 };
 
-const cuentas: FilaCuenta[] = [
-  { id: "act_1029384756", nombre: "001 - vida hs oid_3560", spend: 512.4, oferta: "Seguro de Vida IUL", auto: true },
-  { id: "act_1029384757", nombre: "002 - auto hs oid_3560", spend: 383.15, oferta: "Seguro de Vida IUL", auto: true },
-  { id: "act_1029384758", nombre: "005 - final expense oid_4690", spend: 208.9, oferta: "Gastos Finales", auto: true },
-  { id: "act_1029384759", nombre: "BM3 - cuenta nueva", spend: 100.05, oferta: null, auto: false },
+const gasto: FilaGasto[] = [
+  { plataforma: "TikTok", cuenta: "M.S-T.I#41 - AM - 3876", campana: "Leads - Tradicional - 3560", clicks: 24, spend: 38.05, oferta: "Seguro de Vida IUL" },
+  { plataforma: "TikTok", cuenta: "M.S-T.I#43 - AM", campana: "27/07 - GVL - 3560 - BROAD", clicks: 11, spend: 22.73, oferta: "Seguro de Vida IUL" },
+  { plataforma: "Facebook", cuenta: "BM2 - Vida", campana: "01/08 - oid_3560 - ABO", clicks: 980, spend: 512.4, oferta: "Seguro de Vida IUL" },
+  { plataforma: "Facebook", cuenta: "BM2 - Finales", campana: "02/08 - oid_4690 - CBO", clicks: 640, spend: 208.9, oferta: "Gastos Finales" },
+  { plataforma: "Google", cuenta: "Ads - Principal", campana: "Search - marca", clicks: 210, spend: 100.05, oferta: null },
+];
+
+type FilaPlataforma = {
+  plataforma: string;
+  spend: number;
+  clicks: number;
+  cv: number;
+  revenue: number;
+};
+
+const plataformas: FilaPlataforma[] = [
+  { plataforma: "Facebook", spend: 721.3, clicks: 1620, cv: 39, revenue: 1794 },
+  { plataforma: "TikTok", spend: 60.78, clicks: 35, cv: 9, revenue: 414 },
+  { plataforma: "Google", spend: 100.05, clicks: 210, cv: 4, revenue: 184 },
+  { plataforma: "Desconocido", spend: 0, clicks: 0, cv: 1, revenue: 46 },
 ];
 
 export default function Page() {
@@ -107,24 +125,24 @@ export default function Page() {
         />
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-          <StatTile label="Gasto" value={money(spend)} icono={<Wallet className="h-5 w-5" />} />
-          <StatTile label="Conversiones" value={num(conversions)} icono={<Activity className="h-5 w-5" />} />
-          <StatTile label="Revenue" value={money(revenue)} icono={<BadgeDollarSign className="h-5 w-5" />} />
+          <StatTile label="Gasto" value={money(spend)} icono={<Wallet />} />
+          <StatTile label="Conversiones" value={num(conversions)} icono={<Activity />} />
+          <StatTile label="Revenue" value={money(revenue)} icono={<BadgeDollarSign />} />
           <StatTile
             label="Profit / Pérdida"
             value={money(profit)}
             tone="good"
-            icono={<TrendingUp className="h-5 w-5" />}
+            icono={<TrendingUp />}
           />
           <StatTile
             label="Costo por conversión"
             value={money(spend / conversions)}
-            icono={<Percent className="h-5 w-5" />}
+            icono={<Percent />}
           />
           <StatTile
             label="ROAS"
             value={`${(revenue / spend).toFixed(2)}x`}
-            icono={<MousePointerClick className="h-5 w-5" />}
+            icono={<MousePointerClick />}
           />
         </div>
 
@@ -187,39 +205,97 @@ export default function Page() {
         />
 
         <DataTable
-          titulo="Cuentas publicitarias de hoy"
-          icono={<Wallet className="h-5 w-5" />}
-          filas={cuentas}
-          rowKey={(c) => c.id}
-          vacio="Sin cuentas capturadas hoy."
-          sustantivo="cuentas"
+          titulo="Resumen por plataforma"
+          icono={<Radio className="h-5 w-5" />}
+          filas={plataformas}
+          rowKey={(p) => p.plataforma}
+          vacio="Sin datos de hoy."
+          sustantivo="plataformas"
           columnas={[
+            { key: "plat", label: "Plataforma", render: (p) => p.plataforma },
             {
-              key: "cuenta",
-              label: "Cuenta",
-              render: (c) => (
-                <div>
-                  <span>{c.nombre}</span>
-                  <span className="block text-label-sm text-on-surface-variant">
-                    {c.id}
-                  </span>
-                </div>
+              key: "spend",
+              label: "Gasto",
+              align: "right",
+              render: (p) => <span className="tabular-nums">{money(p.spend)}</span>,
+            },
+            {
+              key: "clicks",
+              label: "Clicks",
+              align: "right",
+              render: (p) => <span className="tabular-nums">{num(p.clicks)}</span>,
+            },
+            {
+              key: "cv",
+              label: "Conversiones",
+              align: "right",
+              render: (p) => <span className="tabular-nums">{num(p.cv)}</span>,
+            },
+            {
+              key: "revenue",
+              label: "Revenue",
+              align: "right",
+              render: (p) => <span className="tabular-nums">{money(p.revenue)}</span>,
+            },
+            {
+              key: "cpa",
+              label: "CPA",
+              align: "right",
+              render: (p) => (
+                <span className="tabular-nums">
+                  {p.cv > 0 ? money(p.spend / p.cv) : "—"}
+                </span>
               ),
+            },
+            {
+              key: "profit",
+              label: "Profit",
+              align: "right",
+              render: (p) => {
+                const v = p.revenue - p.spend;
+                return (
+                  <span
+                    className={`font-semibold tabular-nums ${v >= 0 ? "text-success" : "text-error"}`}
+                  >
+                    {money(v)}
+                  </span>
+                );
+              },
+            },
+          ]}
+        />
+
+        <DataTable
+          titulo="Gasto por cuenta y campaña"
+          icono={<Wallet className="h-5 w-5" />}
+          filas={gasto}
+          rowKey={(g) => `${g.plataforma}|${g.cuenta}|${g.campana}`}
+          vacio="Sin gasto capturado hoy."
+          sustantivo="campañas"
+          columnas={[
+            { key: "plat", label: "Plataforma", render: (g) => g.plataforma },
+            { key: "cuenta", label: "Cuenta", render: (g) => g.cuenta },
+            { key: "campana", label: "Campaña", render: (g) => g.campana },
+            {
+              key: "clicks",
+              label: "Clicks",
+              align: "right",
+              render: (g) => <span className="tabular-nums">{num(g.clicks)}</span>,
             },
             {
               key: "spend",
               label: "Gasto",
               align: "right",
-              render: (c) => <span className="tabular-nums">{money(c.spend)}</span>,
+              render: (g) => <span className="tabular-nums">{money(g.spend)}</span>,
             },
             {
               key: "oferta",
               label: "Oferta asignada",
-              render: (c) =>
-                c.oferta === null ? (
+              render: (g) =>
+                g.oferta === null ? (
                   <span className="font-semibold text-error">⚠ Sin configurar</span>
                 ) : (
-                  c.oferta
+                  g.oferta
                 ),
             },
           ]}

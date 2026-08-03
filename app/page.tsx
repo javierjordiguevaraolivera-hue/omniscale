@@ -87,11 +87,11 @@ export default function Home() {
         <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5">
           <Link href="/" className="flex items-center">
             <Image
-              src="/omniscale-logo.png"
+              src="/omni-logo.png"
               alt="OMNI Scale"
-              width={220}
-              height={122}
-              className="h-12 w-auto"
+              width={251}
+              height={69}
+              className="h-9 w-auto"
               priority
             />
           </Link>

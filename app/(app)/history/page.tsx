@@ -110,17 +110,17 @@ export default async function HistoryPage({
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="Gasto" value={money(total.spend)} icono={<Wallet className="h-5 w-5" />} />
-        <StatTile label="Conversiones" value={num(total.conversions)} icono={<Activity className="h-5 w-5" />} />
-        <StatTile label="Revenue" value={money(total.revenue)} icono={<BadgeDollarSign className="h-5 w-5" />} />
+        <StatTile label="Gasto" value={money(total.spend)} icono={<Wallet />} />
+        <StatTile label="Conversiones" value={num(total.conversions)} icono={<Activity />} />
+        <StatTile label="Revenue" value={money(total.revenue)} icono={<BadgeDollarSign />} />
         <StatTile
           label="Profit / Pérdida"
           value={money(total.profit)}
           tone={total.profit > 0 ? "good" : total.profit < 0 ? "bad" : "neutral"}
-          icono={<TrendingUp className="h-5 w-5" />}
+          icono={<TrendingUp />}
         />
-        <StatTile label="Costo por conversión" value={money(cpa)} icono={<Percent className="h-5 w-5" />} />
-        <StatTile label="ROAS" value={`${roas.toFixed(2)}x`} icono={<MousePointerClick className="h-5 w-5" />} />
+        <StatTile label="Costo por conversión" value={money(cpa)} icono={<Percent />} />
+        <StatTile label="ROAS" value={`${roas.toFixed(2)}x`} icono={<MousePointerClick />} />
       </div>
 
       <Panel titulo="Profit por día" icono={<CalendarRange className="h-5 w-5" />}>

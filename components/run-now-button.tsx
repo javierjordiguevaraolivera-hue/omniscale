@@ -20,7 +20,8 @@ export function RunNowButton() {
               const r = await runIngestNow();
               setMsg(
                 r.ok
-                  ? `Listo · ${r.everflow_rows} filas Everflow · ${r.fb_accounts} cuentas`
+                  ? `Listo · ${r.everflow_rows} filas Everflow · ${r.spend_rows} de gasto` +
+                    (r.sin_asignar > 0 ? ` · ${r.sin_asignar} sin oferta` : "")
                   : `Con errores: ${r.errors.join(" | ").slice(0, 160)}`,
               );
             } catch (e) {
