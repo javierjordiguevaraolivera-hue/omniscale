@@ -8,6 +8,7 @@ import {
 } from "@/app/actions";
 import { RunNowButton } from "@/components/run-now-button";
 import { PageHeader, Panel } from "@/components/panel";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ const inputClass =
 const labelClass = "text-label-md text-on-surface-variant";
 const botonClass =
   "h-10 rounded-lg bg-brand px-4 text-label-md text-white transition-opacity hover:opacity-90";
+const botonChico =
+  "rounded-lg border border-outline-variant px-sm py-1 text-label-md text-on-surface-variant transition-colors hover:bg-surface-container hover:text-brand";
 
 /** Muestra solo los últimos caracteres de la credencial. */
 function mask(key: string) {
@@ -36,7 +39,7 @@ function mask(key: string) {
 
 export default async function ConnectionsPage() {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("connections")
     .select("*")
     .order("platform")
@@ -55,6 +58,18 @@ export default async function ConnectionsPage() {
         <RunNowButton />
       </PageHeader>
 
+      {error && (
+        <div className="rounded-xl border border-error bg-error-container p-md text-body-md">
+          <p className="font-semibold text-on-surface">
+            No se pudo leer la tabla de conexiones
+          </p>
+          <p className="mt-1 text-on-surface-variant">
+            Ejecuta <code>supabase/schema.sql</code> completo en el SQL Editor de
+            Supabase. Hasta entonces, guardar una credencial va a fallar.
+          </p>
+        </div>
+      )}
+
       <Panel
         titulo="Everflow · conversiones y revenue"
         icono={<KeyRound className="h-5 w-5" />}
@@ -65,8 +80,8 @@ export default async function ConnectionsPage() {
             oferta y source ID.
           </p>
           <TablaConexiones conns={everflow} />
-          <form
-            action={addConnection}
+          <ActionForm
+            accion={addConnection}
             className="mt-md grid gap-3 sm:grid-cols-[1fr_2fr_auto]"
           >
             <input type="hidden" name="platform" value="everflow" />
@@ -85,11 +100,9 @@ export default async function ConnectionsPage() {
               />
             </label>
             <div className="flex items-end">
-              <button type="submit" className={botonClass}>
-                Agregar
-              </button>
+              <SubmitButton className={botonClass}>Agregar</SubmitButton>
             </div>
-          </form>
+          </ActionForm>
         </div>
       </Panel>
 
@@ -104,8 +117,8 @@ export default async function ConnectionsPage() {
             del <code>oid_&lt;ID&gt;</code> en el nombre de la cuenta.
           </p>
           <TablaConexiones conns={facebook} />
-          <form
-            action={addConnection}
+          <ActionForm
+            accion={addConnection}
             className="mt-md grid gap-3 sm:grid-cols-[1fr_2fr_auto]"
           >
             <input type="hidden" name="platform" value="facebook" />
@@ -124,11 +137,9 @@ export default async function ConnectionsPage() {
               />
             </label>
             <div className="flex items-end">
-              <button type="submit" className={botonClass}>
-                Agregar
-              </button>
+              <SubmitButton className={botonClass}>Agregar</SubmitButton>
             </div>
-          </form>
+          </ActionForm>
         </div>
       </Panel>
 
@@ -146,8 +157,8 @@ export default async function ConnectionsPage() {
             <code>google</code> también acepta <code>google_ads</code>.
           </p>
           <TablaConexiones conns={windsor} conScope />
-          <form
-            action={addConnection}
+          <ActionForm
+            accion={addConnection}
             className="mt-md grid gap-3 sm:grid-cols-[1fr_1fr_2fr_auto]"
           >
             <input type="hidden" name="platform" value="windsor" />
@@ -174,11 +185,9 @@ export default async function ConnectionsPage() {
               />
             </label>
             <div className="flex items-end">
-              <button type="submit" className={botonClass}>
-                Agregar
-              </button>
+              <SubmitButton className={botonClass}>Agregar</SubmitButton>
             </div>
-          </form>
+          </ActionForm>
         </div>
       </Panel>
     </div>
@@ -225,20 +234,15 @@ function TablaConexiones({
               <td className="px-3 py-2 font-mono text-label-sm">{mask(c.api_key)}</td>
               {conScope && (
                 <td className="px-3 py-2">
-                  <form action={updateScope} className="flex items-center gap-2">
+                  <ActionForm accion={updateScope} className="flex items-center gap-2">
                     <input type="hidden" name="id" value={c.id} />
                     <input
                       name="scope"
                       defaultValue={c.scope ?? "tiktok,google"}
                       className="h-9 w-40 rounded-lg border border-outline-variant bg-surface-container-lowest px-2 text-body-md outline-none focus:ring-2 focus:ring-brand/20"
                     />
-                    <button
-                      type="submit"
-                      className="rounded-lg border border-outline-variant px-sm py-1 text-label-md text-on-surface-variant transition-colors hover:bg-surface-container hover:text-brand"
-                    >
-                      Guardar
-                    </button>
-                  </form>
+                    <SubmitButton className={botonChico}>Guardar</SubmitButton>
+                  </ActionForm>
                 </td>
               )}
               <td className="px-3 py-2 text-label-sm">
@@ -258,25 +262,19 @@ function TablaConexiones({
               </td>
               <td className="px-3 py-2">
                 <div className="flex items-center justify-end gap-2">
-                  <form action={toggleConnection}>
+                  <ActionForm accion={toggleConnection}>
                     <input type="hidden" name="id" value={c.id} />
                     <input type="hidden" name="active" value={String(c.active)} />
-                    <button
-                      type="submit"
-                      className="rounded-lg border border-outline-variant px-sm py-1 text-label-md text-on-surface-variant transition-colors hover:bg-surface-container hover:text-brand"
-                    >
+                    <SubmitButton className={botonChico}>
                       {c.active ? "Pausar" : "Activar"}
-                    </button>
-                  </form>
-                  <form action={deleteConnection}>
+                    </SubmitButton>
+                  </ActionForm>
+                  <ActionForm accion={deleteConnection}>
                     <input type="hidden" name="id" value={c.id} />
-                    <button
-                      type="submit"
-                      className="rounded-lg px-sm py-1 text-label-md text-on-surface-variant transition-colors hover:text-error"
-                    >
+                    <SubmitButton className="rounded-lg px-sm py-1 text-label-md text-on-surface-variant transition-colors hover:text-error">
                       Eliminar
-                    </button>
-                  </form>
+                    </SubmitButton>
+                  </ActionForm>
                 </div>
               </td>
             </tr>

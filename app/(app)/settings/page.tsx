@@ -2,6 +2,7 @@ import { Info, Settings as SettingsIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { updateSettings } from "@/app/actions";
 import { PageHeader, Panel } from "@/components/panel";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 import { todayInTz } from "@/lib/tz";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export default async function SettingsPage() {
       />
 
       <Panel titulo="Configuración del reporte" icono={<SettingsIcon className="h-5 w-5" />}>
-        <form action={updateSettings} className="flex flex-col gap-md p-md">
+        <ActionForm accion={updateSettings} className="flex flex-col gap-md p-md">
           <label className="block">
             <span className="text-label-md text-on-surface-variant">
               Zona horaria del reporte
@@ -89,14 +90,11 @@ export default async function SettingsPage() {
           </label>
 
           <div>
-            <button
-              type="submit"
-              className="h-11 rounded-lg bg-brand px-6 text-label-md text-white transition-opacity hover:opacity-90"
-            >
+            <SubmitButton className="h-11 rounded-lg bg-brand px-6 text-label-md text-white transition-opacity hover:opacity-90">
               Guardar ajustes
-            </button>
+            </SubmitButton>
           </div>
-        </form>
+        </ActionForm>
       </Panel>
 
       <Panel titulo="Cómo funciona la ingesta" icono={<Info className="h-5 w-5" />}>

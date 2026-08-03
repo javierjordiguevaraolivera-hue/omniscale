@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assignOffer } from "@/app/actions";
 import { PageHeader } from "@/components/panel";
 import { DataTable } from "@/components/data-table";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 import { platformLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -110,7 +111,7 @@ export default async function AccountsPage() {
             key: "oferta",
             label: "Oferta",
             render: (f) => (
-              <form action={assignOffer} className="flex items-center gap-2">
+              <ActionForm accion={assignOffer} className="flex items-center gap-2">
                 <input type="hidden" name="datasource" value={f.datasource} />
                 <input type="hidden" name="account_name" value={f.account_name} />
                 <input type="hidden" name="campaign" value={f.campaign} />
@@ -126,13 +127,10 @@ export default async function AccountsPage() {
                     </option>
                   ))}
                 </select>
-                <button
-                  type="submit"
-                  className="rounded-lg border border-outline-variant bg-surface-container-lowest px-sm py-xs text-label-md text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-brand"
-                >
+                <SubmitButton className="rounded-lg border border-outline-variant bg-surface-container-lowest px-sm py-xs text-label-md text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-brand">
                   Guardar
-                </button>
-              </form>
+                </SubmitButton>
+              </ActionForm>
             ),
           },
         ]}

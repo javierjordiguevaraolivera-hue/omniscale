@@ -3,14 +3,22 @@
 import { RefreshCw } from "lucide-react";
 import { useState, useTransition } from "react";
 import { runIngestNow } from "@/app/actions";
+import { mensajeDeError } from "@/lib/errores";
 
 export function RunNowButton() {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const [esError, setEsError] = useState(false);
 
   return (
     <div className="flex items-center gap-3">
-      {msg && <span className="text-label-sm text-on-surface-variant">{msg}</span>}
+      {msg && (
+        <span
+          className={`max-w-md text-label-sm ${esError ? "text-error" : "text-on-surface-variant"}`}
+        >
+          {msg}
+        </span>
+      )}
       <button
         type="button"
         disabled={pending}
@@ -18,14 +26,16 @@ export function RunNowButton() {
           start(async () => {
             try {
               const r = await runIngestNow();
+              setEsError(!r.ok);
               setMsg(
                 r.ok
                   ? `Listo · ${r.everflow_rows} filas Everflow · ${r.spend_rows} de gasto` +
                     (r.sin_asignar > 0 ? ` · ${r.sin_asignar} sin oferta` : "")
-                  : `Con errores: ${r.errors.join(" | ").slice(0, 160)}`,
+                  : mensajeDeError(r.errors[0] ?? "Error desconocido"),
               );
             } catch (e) {
-              setMsg(e instanceof Error ? e.message : "Error");
+              setEsError(true);
+              setMsg(mensajeDeError(e));
             }
           })
         }
