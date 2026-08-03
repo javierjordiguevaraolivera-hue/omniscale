@@ -1,7 +1,12 @@
 -- ============================================================
--- OMNI Scale - Esquema de base de datos
--- Ejecutar completo en el SQL Editor del proyecto de Supabase.
--- Es re-ejecutable: se puede volver a pegar tal cual sin que dé errores.
+-- 0001_baseline · YA APLICADA (2026-08-03)
+--
+-- NO la ejecutes de nuevo. Queda aquí como punto de partida: es el esquema
+-- completo con el que arrancó la base. Solo se corre en una base nueva y
+-- vacía, y después las demás migraciones en orden.
+--
+-- Todo cambio posterior va en un archivo NUEVO de esta carpeta.
+-- Ver supabase/README.md.
 -- ============================================================
 
 -- Tablas de la primera versión (gasto vía tokens de Facebook). Ahora el gasto

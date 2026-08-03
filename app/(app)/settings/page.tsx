@@ -1,4 +1,4 @@
-import { Info, Settings as SettingsIcon } from "lucide-react";
+import { Database, Info, Settings as SettingsIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { updateSettings } from "@/app/actions";
 import { PageHeader, Panel } from "@/components/panel";
@@ -21,12 +21,27 @@ const ZONAS = [
 const inputClass =
   "mt-1 h-11 w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 text-body-md text-on-surface outline-none focus:ring-2 focus:ring-brand/20";
 
+type Migracion = {
+  version: string;
+  nombre: string;
+  aplicada_en: string;
+  nota: string | null;
+};
+
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const { data } = await supabase.from("settings").select("*").eq("id", 1).single();
+  const [{ data }, migRes] = await Promise.all([
+    supabase.from("settings").select("*").eq("id", 1).single(),
+    supabase
+      .from("omni_migraciones")
+      .select("version,nombre,aplicada_en,nota")
+      .order("version"),
+  ]);
   const tz = data?.timezone ?? "America/New_York";
   const efId = data?.everflow_timezone_id ?? 67;
   const retention = data?.retention_days ?? 3;
+  const migraciones = (migRes.data ?? []) as Migracion[];
+  const faltaRegistro = Boolean(migRes.error);
 
   return (
     <div className="flex max-w-3xl flex-col gap-md">
@@ -95,6 +110,67 @@ export default async function SettingsPage() {
             </SubmitButton>
           </div>
         </ActionForm>
+      </Panel>
+
+      <Panel
+        titulo="Migraciones aplicadas"
+        icono={<Database className="h-5 w-5" />}
+      >
+        <div className="p-md">
+          {faltaRegistro ? (
+            <div className="rounded-lg border border-warning bg-[#fff7f3] p-md text-body-md">
+              <p className="font-semibold text-on-surface">
+                Falta el registro de migraciones
+              </p>
+              <p className="mt-1 text-on-surface-variant">
+                Ejecuta{" "}
+                <code>supabase/migrations/0002_registro_migraciones.sql</code> en
+                el SQL Editor de Supabase.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="mb-md text-label-sm text-on-surface-variant">
+                Cada cambio en la base va en un archivo nuevo de{" "}
+                <code>supabase/migrations/</code> y se registra aquí al
+                ejecutarse. Si un archivo de esa carpeta no aparece en esta
+                lista, está pendiente.
+              </p>
+              <div className="overflow-x-auto rounded-lg border border-outline-variant">
+                <table className="w-full text-left">
+                  <thead className="border-b border-outline-variant bg-surface-container-low">
+                    <tr>
+                      {["Versión", "Nombre", "Aplicada", "Nota"].map((h) => (
+                        <th
+                          key={h}
+                          className="whitespace-nowrap px-3 py-2 text-label-md text-on-surface-variant"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/40">
+                    {migraciones.map((m) => (
+                      <tr key={m.version}>
+                        <td className="px-3 py-2 font-mono text-body-md">
+                          {m.version}
+                        </td>
+                        <td className="px-3 py-2 text-body-md">{m.nombre}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-label-sm text-on-surface-variant">
+                          {new Date(m.aplicada_en).toLocaleString("es-PE")}
+                        </td>
+                        <td className="px-3 py-2 text-label-sm text-on-surface-variant">
+                          {m.nota ?? "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
       </Panel>
 
       <Panel titulo="Cómo funciona la ingesta" icono={<Info className="h-5 w-5" />}>

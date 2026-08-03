@@ -14,13 +14,13 @@ export function mensajeDeError(e: unknown): string {
   const t = raw.toLowerCase();
 
   if (t.includes("could not find the table") || t.includes("does not exist")) {
-    return "Faltan las tablas en Supabase. Ejecuta supabase/schema.sql completo en el SQL Editor del proyecto y vuelve a intentar.";
+    return "Faltan tablas en Supabase. Revisa supabase/migrations/: ejecuta en el SQL Editor los archivos que aún no aparezcan en Ajustes > Migraciones aplicadas.";
   }
   if (t.includes("could not find the function")) {
-    return "Faltan las funciones SQL en Supabase. Vuelve a ejecutar supabase/schema.sql completo en el SQL Editor.";
+    return "Faltan funciones SQL en Supabase. Ejecuta en el SQL Editor las migraciones pendientes de supabase/migrations/.";
   }
   if (t.includes("could not find the") && t.includes("column")) {
-    return `La tabla existe pero le falta una columna (${raw}). Vuelve a ejecutar supabase/schema.sql, que es re-ejecutable.`;
+    return `La tabla existe pero le falta una columna (${raw}). Falta aplicar una migración de supabase/migrations/.`;
   }
   if (t.includes("supabasekey is required") || t.includes("supabaseurl is required")) {
     return "Faltan las variables de entorno de Supabase en el servidor (SUPABASE_SERVICE_ROLE_KEY / NEXT_PUBLIC_SUPABASE_URL).";

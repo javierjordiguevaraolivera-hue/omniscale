@@ -66,7 +66,7 @@ Protecciones alrededor de este campo, porque un scope mal puesto vacía el gasto
 - `/logs` muestra el conteo por `datasource` recibido, y en rojo las que el scope
   dejó fuera.
 
-## Tablas (ver `supabase/schema.sql`)
+## Tablas (ver `supabase/migrations/`)
 
 | Tabla | Para qué |
 |---|---|
@@ -84,8 +84,10 @@ consolidado no se borra nunca y ocupa muy poco.
 
 ## Puesta en marcha
 
-1. **Crear el proyecto en Supabase** y ejecutar todo `supabase/schema.sql` en el
-   SQL Editor.
+1. **Crear el proyecto en Supabase** y ejecutar en orden todos los archivos de
+   `supabase/migrations/` en el SQL Editor. Ver `supabase/README.md`: cada cambio
+   en la base va en un archivo nuevo y ninguno se re-ejecuta; en **Ajustes** se
+   ve qué migraciones están aplicadas.
 2. **Variables de entorno** (local en `.env.local`, en Vercel en Project Settings
    → Environment Variables), según `.env.example`:
    - `NEXT_PUBLIC_SUPABASE_URL`

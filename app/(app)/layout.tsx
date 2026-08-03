@@ -39,8 +39,8 @@ function FaltanEnvVars() {
           <li>CRON_SECRET</li>
         </ul>
         <p className="mt-4 text-body-md text-on-surface-variant">
-          Después ejecuta <code>supabase/schema.sql</code> en el SQL Editor del
-          proyecto para crear las tablas.
+          Después ejecuta en orden los archivos de{" "}
+          <code>supabase/migrations/</code> en el SQL Editor del proyecto.
         </p>
       </div>
     </div>

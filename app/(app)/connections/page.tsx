@@ -80,8 +80,9 @@ export default async function ConnectionsPage() {
             No se pudo leer la tabla de conexiones
           </p>
           <p className="mt-1 text-on-surface-variant">
-            Ejecuta <code>supabase/schema.sql</code> completo en el SQL Editor de
-            Supabase. Hasta entonces, guardar una credencial va a fallar.
+            Revisa en Ajustes qué migraciones de{" "}
+            <code>supabase/migrations/</code> están pendientes y ejecútalas en el
+            SQL Editor. Hasta entonces, guardar una credencial va a fallar.
           </p>
         </div>
       )}

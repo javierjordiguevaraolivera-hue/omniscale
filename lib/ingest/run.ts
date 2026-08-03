@@ -44,6 +44,9 @@ export type DetalleFuente = {
   recibidas: number;
   aceptadas: number;
   descartadas: number;
+  /** Gasto total que trajo la fuente. Si no cambia entre corridas, la fuente
+   *  está devolviendo data vieja (no es problema nuestro). */
+  gasto?: number;
   /** Conteo por datasource, tal como lo nombra la fuente. */
   por_datasource?: Record<string, number>;
   /** Datasources que el scope dejó fuera, con su conteo. */
@@ -196,6 +199,7 @@ export async function runIngest(
       recibidas: cuentas.length,
       aceptadas: cuentas.length,
       descartadas: 0,
+      gasto: cuentas.reduce((a, x) => a + x.spend, 0),
       por_datasource: { facebook: cuentas.length },
     });
   }
@@ -226,6 +230,7 @@ export async function runIngest(
     const porDatasource: Record<string, number> = {};
     const fuera: Record<string, number> = {};
     let aceptadas = 0;
+    let gasto = 0;
 
     for (const r of filas) {
       sumar(porDatasource, r.datasource);
@@ -235,6 +240,7 @@ export async function runIngest(
         continue;
       }
       aceptadas++;
+      gasto += r.spend;
       spendRows.push({
         datasource: r.datasource,
         account_name: r.account_name,
@@ -262,6 +268,7 @@ export async function runIngest(
       recibidas: filas.length,
       aceptadas,
       descartadas: filas.length - aceptadas,
+      gasto,
       por_datasource: porDatasource,
       descartados_por_scope: fuera,
       scope: permitidas?.join(",") ?? "*",
