@@ -1,8 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/cron/ingest",
+      "path": "/api/cron/ingest?fuentes=everflow",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/ingest",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

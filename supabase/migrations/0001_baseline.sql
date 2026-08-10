@@ -1,5 +1,5 @@
 -- ============================================================
--- 0001_baseline · YA APLICADA (2026-08-03)
+-- 0001_baseline · YA EJECUTADA
 --
 -- NO la ejecutes de nuevo. Queda aquí como punto de partida: es el esquema
 -- completo con el que arrancó la base. Solo se corre en una base nueva y

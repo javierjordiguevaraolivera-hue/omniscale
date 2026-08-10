@@ -1,30 +1,35 @@
 # Migraciones de Supabase
 
 Una migración = **un archivo nuevo**. Nunca se vuelve a ejecutar un archivo ya
-aplicado, ni se edita un archivo que ya se corrió: si algo salió mal o hay que
-cambiarlo, se crea el siguiente número corrigiéndolo. Así el historial de la base
-queda escrito y se puede leer en orden.
+ejecutado, ni se edita uno que ya corrió: si algo salió mal o hay que cambiarlo,
+se crea el siguiente número corrigiéndolo. Así el historial de la base queda
+escrito y se puede leer en orden.
 
-## Cómo aplicar una migración
+## Cómo trabajamos
 
-1. Abre el archivo pendiente de esta carpeta (el de número más alto sin aplicar).
-2. Pégalo completo en Supabase → **SQL Editor** → Run.
-3. Cada archivo termina registrándose en la tabla `omni_migraciones`, así que
-   después puedes confirmar en **Ajustes** que quedó aplicada.
+1. Cuando un cambio necesita SQL, se crea el **siguiente número libre** y se
+   marca **Pendiente** en la tabla de abajo.
+2. Antony lo pega completo en Supabase → **SQL Editor** → Run, y cambia
+   *Pendiente* por **Ejecutado** en esta tabla. Sin fecha: basta la palabra.
+3. Nunca se entrega otra vez un número ya marcado Ejecutado. Si el `0005` está
+   ejecutado, lo siguiente que se entrega es el `0006`.
+4. Cada archivo se registra solo en `omni_migraciones`, así que el estado real
+   también se puede ver en **Ajustes** dentro de la app.
 
 ## Estado
 
 | Archivo | Estado | Qué hace |
 |---|---|---|
-| `0001_baseline.sql` | aplicada 2026-08-03 | Esquema inicial completo |
-| `0002_registro_migraciones.sql` | **Aplicado** | Crea el registro `omni_migraciones` |
-| `0003_refresh_interval_windsor.sql` | **Aplicado** | `connections.refresh_interval` para controlar el refresco de Windsor |
-| `0004_conexion_zernio.sql` | **Aplicado** | Permite `platform=zernio` en `connections` |
+| `0001_baseline.sql` | **Ejecutado** | Esquema inicial completo |
+| `0002_registro_migraciones.sql` | **Ejecutado** | Crea el registro `omni_migraciones` |
+| `0003_refresh_interval_windsor.sql` | **Ejecutado** | `connections.refresh_interval` para controlar el refresco de Windsor |
+| `0004_conexion_zernio.sql` | **Ejecutado** | Permite `platform=zernio` en `connections` |
+| `0005_serie_arrastra_valores.sql` | **Pendiente** | `intraday_series` arrastra el último valor conocido (para las dos cadencias) |
 
 ## Convenciones
 
 - Nombre: `NNNN_descripcion_corta.sql`, con `NNNN` de 4 dígitos consecutivos.
-- La cabecera de cada archivo dice **PENDIENTE** o **YA APLICADA (fecha)**.
+- La cabecera de cada archivo dice **PENDIENTE** o **YA EJECUTADA**.
 - Cada archivo termina con:
   ```sql
   insert into omni_migraciones (version, nombre, nota) values

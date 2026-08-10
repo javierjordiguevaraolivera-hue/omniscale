@@ -3,6 +3,8 @@ import { endpointDeWindsor } from "@/lib/scope";
 export type WindsorRow = {
   datasource: string; // facebook | tiktok | google | ...
   account_name: string;
+  /** ID de la cuenta en la plataforma. Estable aunque la renombren. */
+  account_id: string;
   campaign: string;
   clicks: number;
   spend: number;
@@ -12,6 +14,7 @@ type WindsorRaw = {
   date?: string;
   datasource?: string;
   source?: string;
+  account_id?: string | number;
   account_name?: string;
   campaign?: string;
   clicks?: number | string;
@@ -19,15 +22,33 @@ type WindsorRaw = {
 };
 
 /**
- * `campaign` es obligatorio para la atribución, no un lujo: en las cuentas de
- * Antony el número de la cuenta y el de la campaña NO coinciden (la cuenta
- * "A1 - 3560" corre campañas de la oferta 3560 y de la 4069). Pedir solo
- * account_name atribuiría ese gasto a la oferta equivocada.
+ * Gasto a NIVEL DE CUENTA (sin campaña ni clicks), como pidió Antony, pero
+ * pidiendo TAMBIÉN `account_id`. Eso último no es un capricho: sin él Windsor
+ * devuelve menos gasto.
+ *
+ * **En Windsor, la lista de campos cambia el total que devuelve.** Medido el
+ * 2026-08-10 contra /facebook, dos rondas idénticas segundos aparte:
+ *
+ *   date,datasource,spend                       -> 1 fila   $151.94  (total sin agrupar)
+ *   date,datasource,account_id,spend            -> 2 filas  $151.94
+ *   date,datasource,account_id,account_name,...  -> 2 filas  $151.94  <-- la que usamos
+ *   date,datasource,account_name,campaign,spend -> 3 filas  $119.36
+ *   date,datasource,account_name,spend          -> 2 filas  $104.54  (pierde $47.40)
+ *
+ * El total sin agrupar ($151.94) es la referencia: agrupar por `account_name`
+ * pierde casi un tercio del gasto, y agrupar por `account_id` no pierde nada.
+ * Así que `account_id` es la dimensión buena y `account_name` va solo para poder
+ * leerlo. Pedir `clicks` también hace perder gasto, por eso no se pide.
+ *
+ * Consecuencia a nivel de cuenta: la oferta se resuelve del nombre de la
+ * CUENTA. Si ese número no existe como oferta en Everflow (p. ej. "A2- 3765"
+ * cuando las ofertas son 3560/4069/4225), esa cuenta queda "sin configurar" y
+ * se asigna a mano en la pantalla Cuentas.
  */
-const FIELDS = "date,datasource,account_name,campaign,clicks,spend";
+const FIELDS = "date,datasource,account_id,account_name,spend";
 
 /**
- * Gasto y clicks del día de UNA plataforma, a nivel de campaña.
+ * Gasto del día de UNA plataforma, a nivel de campaña.
  *
  * Windsor expone un endpoint por plataforma (`/facebook`, `/tiktok`,
  * `/google_ads`…). Se llama uno por cada plataforma configurada, en vez de
@@ -82,11 +103,18 @@ export async function fetchWindsorPlatform(
     const datasource =
       String(r.datasource ?? r.source ?? plataforma).toLowerCase().trim() ||
       plataforma;
+    const accountId = String(r.account_id ?? "").trim();
+    const accountName = String(r.account_name ?? "").trim();
     filas.push({
       datasource,
-      account_name: String(r.account_name ?? "").trim(),
-      campaign: String(r.campaign ?? "").trim(),
-      clicks: Number(r.clicks ?? 0) || 0,
+      // El nombre es lo que se muestra y de donde sale la oferta. Si Windsor no
+      // lo trae, se cae al id para no perder la fila.
+      account_name: accountName || accountId,
+      account_id: accountId,
+      // Vacío = gasto a nivel de cuenta. No se pide campaña (ver FIELDS).
+      campaign: "",
+      // Siempre 0: pedirle clicks a Windsor le hace perder gasto (ver FIELDS).
+      clicks: 0,
       spend: Number(r.spend ?? 0) || 0,
     });
   }

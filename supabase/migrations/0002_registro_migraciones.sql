@@ -1,5 +1,5 @@
 -- ============================================================
--- 0002_registro_migraciones · PENDIENTE
+-- 0002_registro_migraciones · YA EJECUTADA
 --
 -- Crea el registro de migraciones aplicadas, para saber siempre qué está
 -- corrido en esta base sin tener que adivinar. Se ve en Ajustes.

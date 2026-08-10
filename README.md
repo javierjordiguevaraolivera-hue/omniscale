@@ -11,7 +11,35 @@ Stack: Next.js (Vercel) + Supabase. Un solo usuario.
 
 ## Cómo funciona
 
-**Cada 2 minutos** un cron de Vercel llama a `/api/cron/ingest`, que:
+### Dos cadencias, una por fuente
+
+Medido sobre el historial guardado (2026-08-07 al 10), cada fuente actualiza a un
+ritmo muy distinto:
+
+| Fuente | Cada cuánto cambia de verdad |
+|---|---|
+| **Everflow** (conversiones/revenue) | minutos — refleja cada conversión; mínimo observado 6 min entre cambios |
+| **Windsor** (gasto) | **~6 horas** (368 min entre cambios en TikTok el 08-08) |
+
+Por eso hay dos crons en `vercel.json`:
+
+```
+*/2  * * * *   /api/cron/ingest?fuentes=everflow    conversiones y revenue
+*/15 * * * *   /api/cron/ingest                     todo, incluido el gasto
+```
+
+Consultar el gasto cada 2 minutos eran 720 llamadas al día para ~4 cambios
+reales. El endpoint acepta `?fuentes=everflow`, `?fuentes=gasto` o nada (todo).
+La consolidación del día anterior solo corre en las corridas completas, porque
+necesita revenue **y** gasto.
+
+Ojo: como hay capturas que solo traen Everflow, `intraday_series` **arrastra el
+último valor conocido** de gasto y revenue (migración `0005`). Sin eso, los
+gráficos mostrarían el gasto cayendo a $0 entre corridas completas.
+
+### Qué hace cada corrida
+
+Un cron de Vercel llama a `/api/cron/ingest`, que:
 
 1. Pide a Everflow el reporte del día (una fila por oferta × source ID) →
    conversiones y revenue.
@@ -95,19 +123,53 @@ Protecciones, porque este campo mal puesto vacía el gasto:
 - Si `facebook` está en Windsor **y** hay tokens de Facebook activos, la corrida
   se marca como error: ese gasto se estaría contando dos veces.
 
-### Por qué se pide `campaign` y no solo `account_name`
+### Los campos que se piden a Windsor
 
-Porque el número de la cuenta y el de la campaña no coinciden. Datos reales del
-2026-08-10:
+`date,datasource,account_id,account_name,spend` — gasto a **nivel de cuenta**.
 
-```
-A2- 3765   →  "10/08 -- VF - 4225- ALL USA"      $19.72  → oferta 4225
-A1 - 3560  →  "10/08 - New - 3560 - heyflow"     $67.31  → oferta 3560
-A1 - 3560  →  "10/08 - VF new All - 4069 - AN"   $15.01  → oferta 4069
-```
+**Ojo: en Windsor, la lista de campos cambia el total que devuelve.** No es
+timing: medido el 2026-08-10 contra `/facebook`, dos rondas idénticas a segundos
+de distancia.
 
-Con solo `account_name`, esos $15.01 se atribuirían a la oferta 3560 y los
-$19.72 a la 3765: el profit por oferta saldría mal sin ningún error visible.
+| Campos | Filas | Total | A1 - 3560 |
+|---|---|---|---|
+| `date,datasource,spend` (sin agrupar) | 1 | **$151.94** | — |
+| `…account_id,spend` | 2 | **$151.94** | $132.12 |
+| `…account_id,account_name,spend` ← **la que usamos** | 2 | **$151.94** | $132.12 |
+| `…account_name,campaign,spend` | 3 | $119.36 | $99.54 |
+| `…account_name,spend` | 2 | $104.54 | $84.72 |
+| `…account_name,campaign,clicks,spend` | 3 | $102.04 | — |
+
+El total sin agrupar ($151.94) es la referencia. Agrupar por **`account_name`
+pierde $47.40**, casi un tercio del gasto; agrupar por **`account_id` no pierde
+nada**. Por eso `account_id` es la dimensión y `account_name` va solo para poder
+leerlo. Pedir `clicks` también hace perder gasto, así que no se pide: los clicks
+del gasto quedan en 0 y los de conversión siguen viniendo de Everflow.
+
+Al tocar `FIELDS` en `lib/ingest/windsor.ts`, **comprobar siempre** que el total
+sigue cuadrando contra `date,datasource,spend`.
+
+**Consecuencia:** la oferta se resuelve del número del nombre de la cuenta. Si
+ese número no existe como oferta en Everflow, la cuenta queda "sin configurar" y
+se asigna a mano en *Cuentas*. Hoy pasa con `A2- 3765` ($19.82): las ofertas
+reales son 3560, 4069 y 4225.
+
+Y un detalle que costó encontrar: **pedir el campo `source` en `/all` hace que
+Windsor devuelva `{"data":[]}`** — cero filas, sin ningún error. Los endpoints
+por plataforma no tienen ese problema, pero es otra razón para no usar `/all`.
+
+### El MCP de Windsor
+
+Windsor ofrece un MCP en `https://mcp.windsor.ai/` con `Authorization: Bearer
+<api_key>`. Se puede llamar desde el servidor sin n8n (es JSON-RPC sobre HTTP con
+respuestas SSE) y **devuelve exactamente los mismos datos que la API REST**:
+probado el 2026-08-10, `get_data` de facebook dio $104.54, igual que
+`/facebook`. No aporta frescura, así que no se usa.
+
+Lo único que sí tiene y REST no: `get_connectors` lista **todas** las cuentas
+conectadas con su ID y nombre (11 de Facebook, 5 de TikTok), incluso las que no
+gastaron hoy. Serviría para pre-cargar el mapeo cuenta → oferta sin esperar a que
+aparezca gasto.
 
 ## Tablas (ver `supabase/migrations/`)
 
@@ -160,8 +222,8 @@ consolidado no se borra nunca y ocupa muy poco.
 6. **Revisar `/accounts`**: asignar oferta a las combinaciones que quedaron
    &ldquo;sin configurar&rdquo;.
 
-El cron ya viene definido en `vercel.json` (`*/2 * * * *`). Requiere plan Pro; en
-Hobby solo se permite una ejecución diaria.
+Los dos crons ya vienen definidos en `vercel.json`. Requieren plan Pro; en Hobby
+solo se permite una ejecución diaria.
 
 ## Rutas
 
@@ -206,8 +268,11 @@ npm run dev
   planes que no lo admiten hay que dejarlo vacío. Si necesitas gasto de TikTok al
   minuto, la alternativa es ir directo a la API de TikTok Ads, como se hace con
   Facebook.
-- **Rate limits:** si el cron cada 2 minutos da errores 429 (Everflow, Windsor o
-  Facebook), sube el intervalo en `vercel.json` a `*/5 * * * *`.
+- **Rate limits:** si aparecen errores 429, sube los intervalos en `vercel.json`.
+- **Volver a medir la cadencia:** el propio historial sirve. Agrupa `snap_spend`
+  por captura, suma el gasto y cuenta cada cuánto cambia el total del día; igual
+  con `snap_offer_source` para el revenue. Es más fiable que muestrear en vivo,
+  porque usa horas de datos ya recogidos.
 - **Plataformas nuevas:** las que agregues en Windsor aparecen solas en el panel
   con solo añadirlas al campo *Plataformas* de esa conexión. No hay que tocar
   código: tablas, gráficos y mapeo ya son genéricos por `datasource`.

@@ -1,5 +1,5 @@
 -- ============================================================
--- 0004_conexion_zernio · PENDIENTE
+-- 0004_conexion_zernio · YA EJECUTADA
 --
 -- Habilita 'zernio' como plataforma de conexión.
 --

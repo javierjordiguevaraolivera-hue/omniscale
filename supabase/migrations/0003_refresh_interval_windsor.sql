@@ -1,5 +1,5 @@
 -- ============================================================
--- 0003_refresh_interval_windsor · PENDIENTE
+-- 0003_refresh_interval_windsor · YA EJECUTADA
 --
 -- Agrega `refresh_interval` a las conexiones de Windsor.
 --

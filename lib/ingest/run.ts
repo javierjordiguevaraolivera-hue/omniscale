@@ -106,9 +106,23 @@ const keyDeWindsor = (conn: Connection) =>
  * Todo lo que pasa queda registrado en `ingest_runs`, incluidas las filas que
  * se descartan y por qué: es lo que se ve en la pantalla /logs.
  */
+/**
+ * Qué fuentes consultar en esta corrida. Medido sobre el historial guardado:
+ * Everflow refleja cada conversión en minutos, pero Windsor actualiza el gasto
+ * cada ~6 horas. Por eso se pueden pedir por separado y correr con cadencias
+ * distintas (ver vercel.json).
+ */
+export type Fuentes = "todo" | "everflow" | "gasto";
+
+/** Señal interna para omitir la consolidación en corridas parciales. */
+class SaltarRollup extends Error {}
+
 export async function runIngest(
   origen: "cron" | "manual" = "cron",
+  fuentes: Fuentes = "todo",
 ): Promise<IngestResult> {
+  const pideEverflow = fuentes === "todo" || fuentes === "everflow";
+  const pideGasto = fuentes === "todo" || fuentes === "gasto";
   const admin = createAdminClient();
   const errors: string[] = [];
   const detalle: DetalleFuente[] = [];
@@ -131,10 +145,12 @@ export async function runIngest(
     .select("*")
     .eq("active", true);
   const conns = (connections ?? []) as Connection[];
-  const efConn = conns.find((c) => c.platform === "everflow");
-  const fbConns = conns.filter((c) => c.platform === "facebook");
-  const wsConns = conns.filter((c) => c.platform === "windsor");
-  const zeConns = conns.filter((c) => c.platform === "zernio");
+  const efConn = pideEverflow
+    ? conns.find((c) => c.platform === "everflow")
+    : undefined;
+  const fbConns = pideGasto ? conns.filter((c) => c.platform === "facebook") : [];
+  const wsConns = pideGasto ? conns.filter((c) => c.platform === "windsor") : [];
+  const zeConns = pideGasto ? conns.filter((c) => c.platform === "zernio") : [];
 
   // --- 1 y 2 en paralelo -------------------------------------------------
   const [efSettled, ...spendSettled] = await Promise.allSettled([
@@ -441,8 +457,11 @@ export async function runIngest(
   }
 
   // --- 5. consolidación de ayer + purga ----------------------------------
+  // Solo en corridas completas: consolidar el día de ayer necesita revenue Y
+  // gasto, y con una sola de las dos quedaría un resumen a medias.
   const rollupDays: string[] = [];
   try {
+    if (fuentes !== "todo") throw new SaltarRollup();
     const yesterday = shiftDay(day, -1);
     const rolled = await rollupDayIfMissing(
       admin,
@@ -459,7 +478,7 @@ export async function runIngest(
     await admin.from("snap_offer_source").delete().lt("day", cutoff);
     await admin.from("snap_spend").delete().lt("day", cutoff);
   } catch (e) {
-    errors.push(`rollup: ${mensajeDeError(e)}`);
+    if (!(e instanceof SaltarRollup)) errors.push(`rollup: ${mensajeDeError(e)}`);
   }
 
   const resultado: IngestResult = {
