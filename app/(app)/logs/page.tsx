@@ -36,7 +36,14 @@ const seg = (r: Run) =>
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
-/** Una línea por fuente: windsor tiktok:2 $60.78 */
+const soloHora = (iso: string) =>
+  new Date(iso).toLocaleTimeString("es-PE", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+/** Una línea por fuente: windsor tiktok:2 $60.78 sync 14:31 */
 function resumenFuentes(d: DetalleFuente[]): string {
   return d
     .map((f) => {
@@ -49,7 +56,13 @@ function resumenFuentes(d: DetalleFuente[]): string {
         })
         .join(" ");
       const monto = f.gasto !== undefined ? ` ${usd(f.gasto)}` : "";
-      return `${ds || f.fuente + ":0"}${monto}`;
+      // Zernio dice cuándo sincronizó: sirve para medir su frescura real.
+      const sync = f.ultima_sync ? ` sync ${soloHora(f.ultima_sync)}` : "";
+      // Plataformas pedidas que aún no están conectadas en la fuente.
+      const sinCuenta = f.sin_cuenta?.length
+        ? ` [sin conectar: ${f.sin_cuenta.join(",")}]`
+        : "";
+      return `${ds || f.fuente + ":0"}${monto}${sync}${sinCuenta}`;
     })
     .join("  ");
 }
@@ -158,7 +171,8 @@ export default async function LogsPage() {
       {runs.length > 0 && (
         <p className="text-label-sm text-on-surface-variant">
           <strong>ef</strong> = filas de Everflow · <strong>gasto</strong> = filas
-          de gasto guardadas · <code>(-n)</code> = descartadas por el scope ·
+          de gasto guardadas · <code>(-n)</code> = descartadas por el scope ·{" "}
+          <code>sync</code> = hora en que la fuente dice haber sincronizado ·
           últimas {runs.length} corridas
         </p>
       )}

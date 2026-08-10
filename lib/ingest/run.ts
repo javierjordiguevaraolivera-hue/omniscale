@@ -1,9 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchEverflowDay, type EverflowRow } from "@/lib/ingest/everflow";
 import { fetchWindsorDay } from "@/lib/ingest/windsor";
+import { fetchZernioDay } from "@/lib/ingest/zernio";
 import { fetchFacebookSpend } from "@/lib/ingest/facebook";
 import { resolverOferta, type OrigenMapeo } from "@/lib/offer-id";
-import { datasourcePermitido, scopePermitido } from "@/lib/scope";
+import {
+  datasourcePermitido,
+  PLATAFORMAS_WINDSOR,
+  scopePermitido,
+} from "@/lib/scope";
 import { mensajeDeError } from "@/lib/errores";
 import { todayInTz, shiftDay } from "@/lib/tz";
 
@@ -15,6 +20,7 @@ type Connection = {
   label: string;
   api_key: string;
   scope: string | null;
+  refresh_interval: string | null;
   active: boolean;
 };
 
@@ -52,6 +58,10 @@ export type DetalleFuente = {
   /** Datasources que el scope dejó fuera, con su conteo. */
   descartados_por_scope?: Record<string, number>;
   scope?: string;
+  /** Plataformas pedidas que aún no están conectadas en la fuente. */
+  sin_cuenta?: string[];
+  /** Cuándo dice la fuente que sincronizó por última vez (solo Zernio). */
+  ultima_sync?: string | null;
   error?: string;
 };
 
@@ -75,6 +85,14 @@ const claveMapa = (datasource: string, account: string, campaign: string) =>
 const sumar = (mapa: Record<string, number>, clave: string) => {
   mapa[clave] = (mapa[clave] ?? 0) + 1;
 };
+
+/**
+ * La API key de Windsor puede venir de la variable de entorno
+ * `WINDSOR_API_KEY` (tiene prioridad) o de la que se guardó en Conexiones.
+ * Con la env var basta para que funcione sin tocar la base.
+ */
+const keyDeWindsor = (conn: Connection) =>
+  (process.env.WINDSOR_API_KEY ?? "").trim() || conn.api_key;
 
 /**
  * Corrida de ingesta (la ejecuta el cron cada 2 minutos):
@@ -116,6 +134,7 @@ export async function runIngest(
   const efConn = conns.find((c) => c.platform === "everflow");
   const fbConns = conns.filter((c) => c.platform === "facebook");
   const wsConns = conns.filter((c) => c.platform === "windsor");
+  const zeConns = conns.filter((c) => c.platform === "zernio");
 
   // --- 1 y 2 en paralelo -------------------------------------------------
   const [efSettled, ...spendSettled] = await Promise.allSettled([
@@ -123,7 +142,15 @@ export async function runIngest(
       ? fetchEverflowDay(efConn.api_key, day, efTzId)
       : Promise.resolve([] as EverflowRow[]),
     ...fbConns.map((c) => fetchFacebookSpend(c.api_key, day, day)),
-    ...wsConns.map((c) => fetchWindsorDay(c.api_key, day)),
+    ...wsConns.map((c) =>
+      fetchWindsorDay(
+        keyDeWindsor(c),
+        scopePermitido(c.scope) ?? [...PLATAFORMAS_WINDSOR],
+        day,
+        c.refresh_interval,
+      ),
+    ),
+    ...zeConns.map((c) => fetchZernioDay(c.api_key, day)),
   ]);
 
   let efRows: EverflowRow[] = [];
@@ -204,16 +231,89 @@ export async function runIngest(
     });
   }
 
-  // Windsor: nivel campaña, filtrado por scope para no duplicar Facebook.
+  // Windsor: un endpoint por plataforma configurada, a nivel de campaña.
+  // Ya no se filtra después de traer todo: se pide solo lo que se quiere, así
+  // que no hay forma de descartar gasto en silencio.
   for (let i = 0; i < wsConns.length; i++) {
     const conn = wsConns[i];
     const settled = spendSettled[fbConns.length + i];
+    const plataformas = scopePermitido(conn.scope) ?? [
+      ...PLATAFORMAS_WINDSOR,
+    ];
+
     if (settled.status !== "fulfilled") {
       const msg = mensajeDeError(settled.reason);
       errors.push(`windsor [${conn.label}]: ${msg}`);
       await markConnection(admin, conn.id, msg);
       detalle.push({
         fuente: "windsor",
+        etiqueta: conn.label,
+        estado: "error",
+        recibidas: 0,
+        aceptadas: 0,
+        descartadas: 0,
+        scope: plataformas.join(","),
+        error: msg,
+      });
+      continue;
+    }
+
+    const res = settled.value as Awaited<ReturnType<typeof fetchWindsorDay>>;
+    let gasto = 0;
+    for (const r of res.filas) {
+      gasto += r.spend;
+      spendRows.push(r);
+    }
+
+    // Fallos reales por plataforma (credencial, plan, red).
+    const motivos = Object.entries(res.fallos);
+    for (const [plat, msg] of motivos) {
+      errors.push(`windsor [${conn.label}] ${plat}: ${mensajeDeError(msg)}`);
+    }
+
+    // Facebook llega por Windsor Y por token: se contaría dos veces.
+    if (
+      Object.keys(res.porPlataforma).some((p) => p.includes("facebook")) &&
+      fbConns.length > 0
+    ) {
+      errors.push(
+        `windsor [${conn.label}]: Facebook llega por Windsor y también por ${fbConns.length} token(s) de Facebook. El gasto se está contando DOBLE: desactiva una de las dos fuentes.`,
+      );
+    }
+
+    await markConnection(
+      admin,
+      conn.id,
+      motivos.length > 0 ? motivos.map(([p, m]) => `${p}: ${m}`).join(" | ") : null,
+    );
+    detalle.push({
+      fuente: "windsor",
+      etiqueta: conn.label,
+      estado: motivos.length > 0 ? "error" : "ok",
+      recibidas: res.filas.length,
+      aceptadas: res.filas.length,
+      descartadas: 0,
+      gasto,
+      por_datasource: res.porPlataforma,
+      scope: plataformas.join(","),
+      sin_cuenta: res.sinCuenta.length > 0 ? res.sinCuenta : undefined,
+      error:
+        motivos.length > 0
+          ? motivos.map(([p, m]) => `${p}: ${mensajeDeError(m)}`).join(" | ")
+          : undefined,
+    });
+  }
+
+  // Zernio: nivel campaña (agregado desde anuncios), mismo filtro por scope.
+  for (let i = 0; i < zeConns.length; i++) {
+    const conn = zeConns[i];
+    const settled = spendSettled[fbConns.length + wsConns.length + i];
+    if (settled.status !== "fulfilled") {
+      const msg = mensajeDeError(settled.reason);
+      errors.push(`zernio [${conn.label}]: ${msg}`);
+      await markConnection(admin, conn.id, msg);
+      detalle.push({
+        fuente: "zernio",
         etiqueta: conn.label,
         estado: "error",
         recibidas: 0,
@@ -226,13 +326,13 @@ export async function runIngest(
     }
 
     const permitidas = scopePermitido(conn.scope);
-    const filas = settled.value as Awaited<ReturnType<typeof fetchWindsorDay>>;
+    const res = settled.value as Awaited<ReturnType<typeof fetchZernioDay>>;
     const porDatasource: Record<string, number> = {};
     const fuera: Record<string, number> = {};
     let aceptadas = 0;
     let gasto = 0;
 
-    for (const r of filas) {
+    for (const r of res.filas) {
       sumar(porDatasource, r.datasource);
       if (!datasourcePermitido(r.datasource, permitidas)) {
         sumar(fuera, r.datasource);
@@ -241,37 +341,35 @@ export async function runIngest(
       }
       aceptadas++;
       gasto += r.spend;
-      spendRows.push({
-        datasource: r.datasource,
-        account_name: r.account_name,
-        campaign: r.campaign,
-        clicks: r.clicks,
-        spend: r.spend,
-      });
+      spendRows.push(r);
     }
 
-    // Si Windsor trajo datos y el scope los dejó TODOS fuera, casi siempre es
-    // un scope mal configurado. Se avisa como error, no en silencio.
-    if (filas.length > 0 && aceptadas === 0) {
+    if (res.filas.length > 0 && aceptadas === 0) {
       errors.push(
-        `windsor [${conn.label}]: llegaron ${filas.length} filas (${Object.keys(
+        `zernio [${conn.label}]: llegaron ${res.filas.length} campañas (${Object.keys(
           porDatasource,
         ).join(", ")}) pero el scope "${permitidas?.join(",") ?? "*"}" las descartó todas.`,
+      );
+    }
+    if (res.backfillPendiente) {
+      errors.push(
+        `zernio [${conn.label}]: Zernio sigue cargando histórico (backfillPending), las cifras pueden estar incompletas.`,
       );
     }
 
     await markConnection(admin, conn.id, null);
     detalle.push({
-      fuente: "windsor",
+      fuente: "zernio",
       etiqueta: conn.label,
       estado: "ok",
-      recibidas: filas.length,
+      recibidas: res.filas.length,
       aceptadas,
-      descartadas: filas.length - aceptadas,
+      descartadas: res.filas.length - aceptadas,
       gasto,
       por_datasource: porDatasource,
       descartados_por_scope: fuera,
       scope: permitidas?.join(",") ?? "*",
+      ultima_sync: res.ultimaSync,
     });
   }
 
@@ -352,6 +450,7 @@ export async function runIngest(
       efConn,
       fbConns,
       wsConns,
+      zeConns,
       efTzId,
     );
     if (rolled) rollupDays.push(yesterday);
@@ -519,6 +618,7 @@ async function rollupDayIfMissing(
   efConn: Connection | undefined,
   fbConns: Connection[],
   wsConns: Connection[],
+  zeConns: Connection[],
   efTzId: number,
 ): Promise<boolean> {
   const { count } = await admin
@@ -535,7 +635,15 @@ async function rollupDayIfMissing(
   const spendRows: SpendRow[] = [];
   const settled = await Promise.allSettled([
     ...fbConns.map((c) => fetchFacebookSpend(c.api_key, day, day)),
-    ...wsConns.map((c) => fetchWindsorDay(c.api_key, day)),
+    ...wsConns.map((c) =>
+      fetchWindsorDay(
+        keyDeWindsor(c),
+        scopePermitido(c.scope) ?? [...PLATAFORMAS_WINDSOR],
+        day,
+        c.refresh_interval,
+      ),
+    ),
+    ...zeConns.map((c) => fetchZernioDay(c.api_key, day)),
   ]);
   for (let i = 0; i < fbConns.length; i++) {
     const s = settled[i];
@@ -553,8 +661,17 @@ async function rollupDayIfMissing(
   for (let i = 0; i < wsConns.length; i++) {
     const s = settled[fbConns.length + i];
     if (s.status !== "fulfilled") continue;
-    const permitidas = scopePermitido(wsConns[i].scope);
-    for (const r of s.value as Awaited<ReturnType<typeof fetchWindsorDay>>) {
+    // Ya viene solo lo pedido: un endpoint por plataforma, sin filtro posterior.
+    spendRows.push(
+      ...(s.value as Awaited<ReturnType<typeof fetchWindsorDay>>).filas,
+    );
+  }
+  for (let i = 0; i < zeConns.length; i++) {
+    const s = settled[fbConns.length + wsConns.length + i];
+    if (s.status !== "fulfilled") continue;
+    const permitidas = scopePermitido(zeConns[i].scope);
+    const res = s.value as Awaited<ReturnType<typeof fetchZernioDay>>;
+    for (const r of res.filas) {
       if (!datasourcePermitido(r.datasource, permitidas)) continue;
       spendRows.push(r);
     }

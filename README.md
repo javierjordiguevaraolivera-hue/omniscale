@@ -17,8 +17,13 @@ Stack: Next.js (Vercel) + Supabase. Un solo usuario.
    conversiones y revenue.
 2. Pide el gasto del día, en paralelo:
    - **Facebook**: un token por app / BM, a nivel de **cuenta**.
-   - **Windsor.ai**: una sola API key, a nivel de **campaña**. Cubre TikTok y
-     Google Ads (ver *scope* más abajo).
+   - **Windsor.ai**: una sola API key, a nivel de **campaña**. Se llama **un
+     endpoint por plataforma** (`/facebook`, `/tiktok`, `/google_ads`), no
+     `/all`: se pide solo lo configurado, así que no hay forma de descartar
+     gasto en silencio.
+   - **Zernio**: alternativa a Windsor. Una API key cubre Meta, TikTok y Google;
+     devuelve una fila por anuncio que agregamos a campaña. Reporta
+     `lastSyncedAt`, así que su frescura real se ve en `/logs`.
 3. Resuelve la oferta de cada fila de gasto y actualiza `spend_map`.
 4. Guarda los snapshots con el `offer_id` **congelado** en ese instante.
 5. Cuando cambia el día, consolida el anterior en `daily_summary` (una fila por
@@ -42,36 +47,74 @@ cuenta (p. ej. el `3876` de `M.S-T.I#41 - AM - 3876`) con un ID de oferta.
 ese momento, si mañana pasas una campaña de "seguro de auto" a "seguro de vida",
 el histórico sigue mostrando auto y solo lo nuevo aparece como vida.
 
-### Scope de Windsor (evita contar el gasto doble)
+### Zernio como fuente de gasto
 
-Windsor puede traer varias plataformas a la vez. Como el gasto de Facebook ya
-entra por su propio token, la conexión de Windsor tiene un campo
-**Plataformas**: por defecto `tiktok,google`. Acepta `*` para aceptar todas,
-pero si lo pones teniendo tokens de Facebook activos, el gasto de Facebook se
-contaría dos veces.
+[Zernio](https://zernio.com/) expone Meta, TikTok y Google Ads detrás de una
+sola API key (`sk_…`). El **OAuth es entre tú y Zernio**: se conecta cada cuenta
+publicitaria una vez en su panel, y desde el servidor solo se manda la key.
 
-La comparación es por coincidencia parcial, no exacta: escribir `google` también
-acepta un `datasource` que Windsor devuelva como `google_ads`. Es a propósito —
-con comparación exacta, un cambio de nombre en Windsor haría desaparecer ese
-gasto sin dar ningún error.
+- Endpoint: `GET https://zernio.com/api/v1/ads` con `Authorization: Bearer`.
+- Parámetros que usamos: `fromDate`, `toDate`, `source=all` (para incluir
+  anuncios no creados desde Zernio), `limit=500` y paginación por `page`.
+- Devuelve una fila por **anuncio**; se agrega por plataforma × cuenta × campaña.
+- `metrics.lastSyncedAt` se guarda en la bitácora y sale en `/logs` como
+  `sync HH:MM`: es la forma de comprobar si de verdad refresca "cada pocos
+  minutos" como promete, sin tener que fiarse del marketing.
+- `backfillPending` en la respuesta marca la corrida como error, porque las
+  cifras pueden estar incompletas mientras Zernio carga histórico.
 
-Protecciones alrededor de este campo, porque un scope mal puesto vacía el gasto:
+Usa el mismo campo *scope* que Windsor. **No actives Zernio y Windsor para la
+misma plataforma**: el gasto se contaría dos veces.
+
+### Plataformas de Windsor
+
+El campo **Plataformas** de la conexión decide **a qué endpoints se llama**, uno
+por plataforma. Por defecto `facebook,tiktok,google`. Nombres cortos → endpoint
+real de Windsor:
+
+| Se escribe | Endpoint |
+|---|---|
+| `facebook` | `/facebook` |
+| `tiktok` | `/tiktok` |
+| `google` | `/google_ads` |
+
+Verificado 2026-08-10: `/google` y `/googleads` responden *"We don't have this
+connector yet!"*; el bueno es `/google_ads`.
+
+Una plataforma que no esté conectada en el panel de Windsor devuelve HTTP 400
+*"No X account for user … was found"*. Eso **no** se trata como error —
+aparecería en rojo cada 2 minutos sin que haya nada roto; se muestra en `/logs`
+como `[sin conectar: google]`.
+
+Protecciones, porque este campo mal puesto vacía el gasto:
 
 - Se elige con **casillas**, no escribiendo (el autocompletado del navegador metió
   un correo aquí una vez y descartó todo el gasto de Windsor en silencio).
 - Un valor que no puede ser un nombre de plataforma se **ignora** y se cae al
-  valor por defecto, en vez de descartar todo.
-- Si Windsor devuelve filas y el scope las descarta **todas**, la corrida se
-  marca como error y lo dice en `/logs`.
-- `/logs` muestra el conteo por `datasource` recibido, y en rojo las que el scope
-  dejó fuera.
+  valor por defecto.
+- Si `facebook` está en Windsor **y** hay tokens de Facebook activos, la corrida
+  se marca como error: ese gasto se estaría contando dos veces.
+
+### Por qué se pide `campaign` y no solo `account_name`
+
+Porque el número de la cuenta y el de la campaña no coinciden. Datos reales del
+2026-08-10:
+
+```
+A2- 3765   →  "10/08 -- VF - 4225- ALL USA"      $19.72  → oferta 4225
+A1 - 3560  →  "10/08 - New - 3560 - heyflow"     $67.31  → oferta 3560
+A1 - 3560  →  "10/08 - VF new All - 4069 - AN"   $15.01  → oferta 4069
+```
+
+Con solo `account_name`, esos $15.01 se atribuirían a la oferta 3560 y los
+$19.72 a la 3765: el profit por oferta saldría mal sin ningún error visible.
 
 ## Tablas (ver `supabase/migrations/`)
 
 | Tabla | Para qué |
 |---|---|
 | `settings` | zona horaria, `timezone_id` de Everflow, días de retención |
-| `connections` | Everflow, tokens de Facebook y Windsor (con su `scope`) |
+| `connections` | Everflow, tokens de Facebook, Windsor y Zernio (con su `scope`) |
 | `offers` | catálogo de ofertas (se llena solo desde Everflow) |
 | `spend_map` | plataforma × cuenta × campaña → oferta **actual**, y de dónde salió |
 | `snap_offer_source` | snapshots del día: conversiones y revenue por oferta × source |
@@ -146,6 +189,23 @@ npm run dev
   numérico (67 = New York) que debe coincidir con la zona elegida. Facebook
   interpreta el rango según la zona de cada cuenta publicitaria, así que
   conviene tenerlas todas en la misma.
+- **Frescura del gasto de Windsor.** El cron corre cada 2 minutos, pero Windsor
+  sirve su propia copia cacheada: el parámetro `refresh_interval` define cada
+  cuánto vuelve a consultar la plataforma de origen, y **su valor por defecto es
+  6 h**. Consultarlo más seguido no adelanta nada. Los intervalos por plan
+  ([precios](https://windsor.ai/pricing/)):
+
+  | Plan | Refresco | Nota |
+  |---|---|---|
+  | Free / Basic / **Trial** | diario | rechaza `refresh_interval` con HTTP 403 |
+  | Standard ($99–118/mes) | 1 h o más | |
+  | Plus ($249–299/mes) | 1 h o más | |
+  | Professional ($499–598/mes) | 15 min o más | |
+
+  Se configura por conexión en *Conexiones* → **Intervalo de refresco**. En
+  planes que no lo admiten hay que dejarlo vacío. Si necesitas gasto de TikTok al
+  minuto, la alternativa es ir directo a la API de TikTok Ads, como se hace con
+  Facebook.
 - **Rate limits:** si el cron cada 2 minutos da errores 429 (Everflow, Windsor o
   Facebook), sube el intervalo en `vercel.json` a `*/5 * * * *`.
 - **Plataformas nuevas:** las que agregues en Windsor aparecen solas en el panel

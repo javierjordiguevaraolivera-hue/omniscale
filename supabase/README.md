@@ -17,7 +17,9 @@ queda escrito y se puede leer en orden.
 | Archivo | Estado | Qué hace |
 |---|---|---|
 | `0001_baseline.sql` | aplicada 2026-08-03 | Esquema inicial completo |
-| `0002_registro_migraciones.sql` | **pendiente** | Crea el registro `omni_migraciones` |
+| `0002_registro_migraciones.sql` | **Aplicado** | Crea el registro `omni_migraciones` |
+| `0003_refresh_interval_windsor.sql` | **Aplicado** | `connections.refresh_interval` para controlar el refresco de Windsor |
+| `0004_conexion_zernio.sql` | **Aplicado** | Permite `platform=zernio` en `connections` |
 
 ## Convenciones
 

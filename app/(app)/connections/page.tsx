@@ -1,4 +1,4 @@
-import { Facebook, KeyRound, Wallet } from "lucide-react";
+import { Facebook, KeyRound, Wallet, Zap } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
   addConnection,
@@ -20,6 +20,7 @@ type Connection = {
   label: string;
   api_key: string;
   scope: string | null;
+  refresh_interval: string | null;
   active: boolean;
   last_ok_at: string | null;
   last_error: string | null;
@@ -53,17 +54,22 @@ export default async function ConnectionsPage() {
   const everflow = conns.filter((c) => c.platform === "everflow");
   const facebook = conns.filter((c) => c.platform === "facebook");
   const windsor = conns.filter((c) => c.platform === "windsor");
+  const zernio = conns.filter((c) => c.platform === "zernio");
 
-  // Plataformas que Windsor devolvió de verdad en las últimas corridas: se
+  // Plataformas que cada fuente devolvió de verdad en las últimas corridas: se
   // marcan con un punto verde para no tener que adivinar cómo las nombra.
-  const vistas = new Set<string>();
-  for (const r of (runs ?? []) as { detalle: DetalleFuente[] }[]) {
-    for (const d of r.detalle ?? []) {
-      if (d.fuente !== "windsor") continue;
-      for (const ds of Object.keys(d.por_datasource ?? {})) vistas.add(ds);
+  const vistasPorFuente = (fuente: string) => {
+    const vistas = new Set<string>();
+    for (const r of (runs ?? []) as { detalle: DetalleFuente[] }[]) {
+      for (const d of r.detalle ?? []) {
+        if (d.fuente !== fuente) continue;
+        for (const ds of Object.keys(d.por_datasource ?? {})) vistas.add(ds);
+      }
     }
-  }
-  const vistasWindsor = [...vistas];
+    return [...vistas];
+  };
+  const vistasWindsor = vistasPorFuente("windsor");
+  const vistasZernio = vistasPorFuente("zernio");
 
   return (
     <div className="flex flex-col gap-md">
@@ -207,6 +213,58 @@ export default async function ConnectionsPage() {
           </ActionForm>
         </div>
       </Panel>
+
+      <Panel
+        titulo="Zernio · gasto por campaña"
+        icono={<Zap className="h-5 w-5" />}
+      >
+        <div className="p-md">
+          <p className="mb-md text-label-sm text-on-surface-variant">
+            Alternativa a Windsor: una sola API key cubre Meta, TikTok y Google
+            Ads. El OAuth con cada cuenta publicitaria se hace una vez en el
+            panel de Zernio; aquí solo va la key (empieza con <code>sk_</code>).
+            Zernio reporta cuándo sincronizó por última vez, y eso aparece en
+            Logs para saber si la data viene fresca.
+          </p>
+          <p className="mb-md rounded-lg border border-warning bg-[#fff7f3] px-3 py-2 text-label-sm text-on-surface-variant">
+            No actives Zernio y Windsor para la misma plataforma: el gasto se
+            contaría dos veces. Usa uno u otro, o repártelas con las casillas.
+          </p>
+          <TablaConexiones conns={zernio} conScope vistas={vistasZernio} />
+          <ActionForm accion={addConnection} className="mt-md flex flex-col gap-3">
+            <input type="hidden" name="platform" value="zernio" />
+            <div className="grid gap-3 sm:grid-cols-[1fr_2fr_auto]">
+              <label className="grid gap-1.5">
+                <span className={labelClass}>Etiqueta</span>
+                <input
+                  name="label"
+                  placeholder="Zernio"
+                  autoComplete="off"
+                  className={inputClass}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className={labelClass}>API key de Zernio</span>
+                <input
+                  name="api_key"
+                  type="password"
+                  required
+                  placeholder="sk_..."
+                  autoComplete="new-password"
+                  className={inputClass}
+                />
+              </label>
+              <div className="flex items-end">
+                <SubmitButton className={botonClass}>Agregar</SubmitButton>
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <span className={labelClass}>Plataformas que aporta Zernio</span>
+              <ScopePicker vistas={vistasZernio} conRefresh={false} />
+            </div>
+          </ActionForm>
+        </div>
+      </Panel>
     </div>
   );
 }
@@ -255,7 +313,11 @@ function TablaConexiones({
                 <td className="px-3 py-2">
                   <ActionForm accion={updateScope} className="flex flex-col gap-2">
                     <input type="hidden" name="id" value={c.id} />
-                    <ScopePicker valorInicial={c.scope} vistas={vistas} />
+                    <ScopePicker
+                      valorInicial={c.scope}
+                      refreshInicial={c.refresh_interval}
+                      vistas={vistas}
+                    />
                     <SubmitButton className={`${botonChico} self-start`}>
                       Guardar plataformas
                     </SubmitButton>

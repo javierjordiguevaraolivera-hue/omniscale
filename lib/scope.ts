@@ -1,11 +1,11 @@
 /** Plataformas que aporta Windsor si la conexión no dice otra cosa. */
-export const SCOPE_WINDSOR_DEFAULT = "tiktok,google";
+export const SCOPE_WINDSOR_DEFAULT = "facebook,tiktok,google";
 
 /** Plataformas que ofrecemos como opción en la pantalla de Conexiones. */
 export const PLATAFORMAS_WINDSOR = [
+  "facebook",
   "tiktok",
   "google",
-  "facebook",
   "snapchat",
   "bing",
   "linkedin",
@@ -13,8 +13,55 @@ export const PLATAFORMAS_WINDSOR = [
   "outbrain",
 ] as const;
 
+/**
+ * Nombre corto -> endpoint real de Windsor. Se llama un endpoint por
+ * plataforma (`/facebook`, `/tiktok`, `/google_ads`), no `/all`: así nunca se
+ * descarta gasto en silencio por un filtro mal puesto.
+ * Verificado 2026-08-10: `/google` y `/googleads` responden "We don't have this
+ * connector yet!"; el correcto es `/google_ads`.
+ */
+const ENDPOINTS: Record<string, string> = {
+  facebook: "facebook",
+  tiktok: "tiktok",
+  google: "google_ads",
+  google_ads: "google_ads",
+  snapchat: "snapchat",
+  bing: "bing",
+  linkedin: "linkedin",
+  taboola: "taboola",
+  outbrain: "outbrain",
+};
+
+export function endpointDeWindsor(plataforma: string): string {
+  const p = plataforma.toLowerCase().trim();
+  return ENDPOINTS[p] ?? p;
+}
+
 /** Un término de scope válido: solo letras, números, guion y guion bajo. */
 const TERMINO_VALIDO = /^[a-z0-9_-]{2,40}$/;
+
+/**
+ * Intervalos de refresco que acepta Windsor.
+ *
+ * Vacío = no mandar el parámetro. Es lo único que funciona en Free, Trial y
+ * **Basic**: verificado 2026-08-10 que en plan BASIC la API responde HTTP 403
+ * "Hourly data is not available for BASIC subscription plan" con cualquier
+ * valor, incluso 1h. Standard y Plus admiten 1h o más; Professional y
+ * Enterprise, 15min o más.
+ */
+export const REFRESH_INTERVALS = [
+  { valor: "", label: "Por defecto del plan (única opción en Free/Trial/Basic)" },
+  { valor: "6h", label: "6 horas — requiere Standard o superior" },
+  { valor: "1h", label: "1 hora — requiere Standard o superior" },
+  { valor: "30min", label: "30 minutos — requiere Professional" },
+  { valor: "15min", label: "15 minutos — requiere Professional" },
+] as const;
+
+const INTERVALOS_VALIDOS = new Set(REFRESH_INTERVALS.map((r) => r.valor));
+
+export function esRefreshIntervalValido(v: string): boolean {
+  return INTERVALOS_VALIDOS.has(v.trim() as (typeof REFRESH_INTERVALS)[number]["valor"]);
+}
 
 /**
  * Limpia el scope escrito por el usuario. Descarta lo que no puede ser el

@@ -22,6 +22,18 @@ export function mensajeDeError(e: unknown): string {
   if (t.includes("could not find the") && t.includes("column")) {
     return `La tabla existe pero le falta una columna (${raw}). Falta aplicar una migración de supabase/migrations/.`;
   }
+  if (t.includes("hourly data is not available")) {
+    return "Tu plan de Windsor solo permite refresco diario. Deja el intervalo de refresco vacío, o sube a Standard (1h) o Professional (15min) en windsor.ai/pricing.";
+  }
+  if (t.includes("please check the api key used")) {
+    return "Windsor no reconoce la API key. Revísala en Conexiones.";
+  }
+  if (t.includes("zernio") && (t.includes("401") || t.includes("unauthorized"))) {
+    return "Zernio no reconoce la API key (debe empezar con sk_). Revísala en Conexiones.";
+  }
+  if (t.includes("zernio") && t.includes("403")) {
+    return "Zernio rechazó la petición. Revisa que las cuentas publicitarias estén conectadas por OAuth en el panel de Zernio.";
+  }
   if (t.includes("supabasekey is required") || t.includes("supabaseurl is required")) {
     return "Faltan las variables de entorno de Supabase en el servidor (SUPABASE_SERVICE_ROLE_KEY / NEXT_PUBLIC_SUPABASE_URL).";
   }
