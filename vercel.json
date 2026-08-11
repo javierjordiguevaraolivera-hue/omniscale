@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/ingest?fuentes=everflow",
+      "path": "/api/cron/ingest?fuentes=everflow,facebook",
       "schedule": "*/2 * * * *"
     },
     {

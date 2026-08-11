@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/panel";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { RunNowButton } from "@/components/run-now-button";
 import type { DetalleFuente } from "@/lib/ingest/run";
 
@@ -94,6 +95,7 @@ export default async function LogsPage() {
         titulo="Logs"
         descripcion="Una línea por corrida. Entre paréntesis, las filas que se descartaron."
       >
+        <AutoRefresh segundos={120} />
         <RunNowButton />
       </PageHeader>
 

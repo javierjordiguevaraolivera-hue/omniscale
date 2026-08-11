@@ -16,6 +16,7 @@ import { StatTile } from "@/components/stat-tile";
 import { RunNowButton } from "@/components/run-now-button";
 import { OfferSelect } from "@/components/offer-select";
 import { Panel, PageHeader } from "@/components/panel";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { DataTable } from "@/components/data-table";
 import {
   OperationChart,
@@ -160,6 +161,7 @@ export default async function DashboardPage({
             : `Zona horaria ${tz} · sin capturas todavía`
         }
       >
+        <AutoRefresh segundos={120} />
         <OfferSelect offers={offers} value={offer ?? "all"} basePath="/dashboard" />
         <RunNowButton />
       </PageHeader>

@@ -14,6 +14,7 @@ import { StatTile } from "@/components/stat-tile";
 import { OfferSelect } from "@/components/offer-select";
 import { RangeTabs } from "@/components/range-tabs";
 import { Panel, PageHeader } from "@/components/panel";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { DataTable } from "@/components/data-table";
 import { HistoryChart, type HistoryPoint } from "@/components/charts/history-chart";
 
@@ -100,6 +101,7 @@ export default async function HistoryPage({
         titulo="Histórico"
         descripcion={`${desde} → ${hasta} · una fila consolidada por día y oferta`}
       >
+        <AutoRefresh segundos={120} />
         <RangeTabs days={days} offer={sp.offer ?? "all"} />
         <OfferSelect
           offers={offers}

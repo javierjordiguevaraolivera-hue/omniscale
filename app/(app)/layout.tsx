@@ -17,6 +17,9 @@ export default async function AppLayout({
   return (
     <div className="min-h-screen bg-surface-bright text-on-surface">
       <Sidebar email={String(data.claims.email ?? "")} />
+      {/* El indicador "en vivo" (AutoRefresh) va en cada pantalla de datos, no
+          aquí: en Ajustes y Conexiones no hace falta refrescar y podría estorbar
+          mientras se escribe un token. */}
       <main className="ml-[260px] min-h-screen px-lg pb-lg pt-lg">{children}</main>
     </div>
   );

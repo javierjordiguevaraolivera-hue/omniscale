@@ -2,6 +2,7 @@ import { Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { assignOffer } from "@/app/actions";
 import { PageHeader } from "@/components/panel";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { DataTable } from "@/components/data-table";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { platformLabel } from "@/lib/format";
@@ -57,7 +58,9 @@ export default async function AccountsPage() {
       <PageHeader
         titulo="Cuentas y campañas"
         descripcion="La oferta se detecta del nombre: primero oid_<ID> en la campaña, luego en la cuenta, y si no, un número que coincida con una oferta de Everflow. Cambiarla solo afecta las capturas futuras; el histórico conserva la que tenía."
-      />
+      >
+        <AutoRefresh segundos={120} />
+      </PageHeader>
 
       {pendientes > 0 && (
         <div className="rounded-xl border border-warning bg-[#fff7f3] p-md text-body-md">

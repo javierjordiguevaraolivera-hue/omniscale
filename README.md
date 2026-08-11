@@ -24,14 +24,37 @@ ritmo muy distinto:
 Por eso hay dos crons en `vercel.json`:
 
 ```
-*/2  * * * *   /api/cron/ingest?fuentes=everflow    conversiones y revenue
-*/15 * * * *   /api/cron/ingest                     todo, incluido el gasto
+*/2  * * * *   /api/cron/ingest?fuentes=everflow,facebook
+*/15 * * * *   /api/cron/ingest                            todo, incl. Windsor
 ```
 
-Consultar el gasto cada 2 minutos eran 720 llamadas al día para ~4 cambios
-reales. El endpoint acepta `?fuentes=everflow`, `?fuentes=gasto` o nada (todo).
-La consolidación del día anterior solo corre en las corridas completas, porque
-necesita revenue **y** gasto.
+Everflow y Facebook son APIs propias sin límite práctico, así que van cada 2
+minutos. Windsor sirve su copia cacheada y solo la refresca cada ~6 h: pedirla
+cada 2 minutos serían 720 llamadas al día para ~4 cambios reales.
+
+El endpoint acepta `?fuentes=` con cualquier combinación de `everflow`,
+`facebook`, `windsor`, `zernio` (separadas por coma). Sin el parámetro corre
+todas. La consolidación del día anterior solo corre en las corridas completas,
+porque necesita revenue **y** gasto.
+
+### El panel se actualiza solo
+
+Las pantallas son server components: se renderizan frescas en cada petición,
+pero el navegador no vuelve a pedirlas por su cuenta. `components/auto-refresh.tsx`
+llama a `router.refresh()` **cada 2 minutos**, al mismo ritmo que el cron, así que
+la data aparece sin darle a nada y sin recargar la página (se mantienen el scroll
+y el estado de la UI).
+
+- Cuando la pestaña está oculta no refresca, y al volver a ella se pone al día
+  al instante.
+- El indicador muestra "actualizado hace X" y se puede pulsar para forzarlo.
+- Está en las pantallas de datos (Panel, Histórico, Cuentas, BMs, Logs) pero
+  **no** en Conexiones ni Ajustes: ahí no hay data viva y un refresco podría
+  estorbar mientras se escribe un token.
+
+Al cambiar de sección en el sidebar se ve un **skeleton** con la forma de cada
+pantalla (`loading.tsx` por ruta, piezas en `components/skeletons.tsx`), con un
+brillo que recorre los bloques de izquierda a derecha.
 
 Ojo: como hay capturas que solo traen Everflow, `intraday_series` **arrastra el
 último valor conocido** de gasto y revenue (migración `0005`). Sin eso, los

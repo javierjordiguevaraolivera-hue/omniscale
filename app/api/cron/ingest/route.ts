@@ -1,4 +1,4 @@
-import { runIngest, type Fuentes } from "@/lib/ingest/run";
+import { parsearFuentes, runIngest } from "@/lib/ingest/run";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -6,10 +6,10 @@ export const maxDuration = 120;
 /**
  * Lo invoca el cron de Vercel (ver vercel.json).
  *
- * `?fuentes=everflow` solo trae conversiones y revenue; `?fuentes=gasto` solo
- * el gasto; sin parámetro trae todo. Sirve para correr cada fuente a su propia
- * frecuencia: Everflow refleja cada conversión en minutos, pero Windsor
- * actualiza el gasto cada ~6 horas.
+ * `?fuentes=everflow,facebook` corre solo esas; sin parámetro corre todas.
+ * Sirve para darle a cada fuente su propio ritmo: Everflow y Facebook son APIs
+ * propias sin límite práctico y van cada 2 minutos, mientras Windsor sirve una
+ * copia que solo refresca cada ~6 horas.
  *
  * Vercel manda "Authorization: Bearer <CRON_SECRET>" automáticamente cuando la
  * env var CRON_SECRET está definida en el proyecto.
@@ -20,9 +20,9 @@ export async function GET(request: Request) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const pedido = new URL(request.url).searchParams.get("fuentes");
-  const fuentes: Fuentes =
-    pedido === "everflow" || pedido === "gasto" ? pedido : "todo";
+  const fuentes = parsearFuentes(
+    new URL(request.url).searchParams.get("fuentes"),
+  );
 
   try {
     const result = await runIngest("cron", fuentes);

@@ -120,6 +120,17 @@ export default {
       },
       backgroundSize: {
         "grid-cell": "72px 72px",
+        shimmer: "200% 100%",
+      },
+      keyframes: {
+        // Brillo que recorre los bloques del skeleton de izquierda a derecha.
+        shimmer: {
+          "0%": { backgroundPosition: "200% 0" },
+          "100%": { backgroundPosition: "-200% 0" },
+        },
+      },
+      animation: {
+        shimmer: "shimmer 1.6s linear infinite",
       },
     },
   },

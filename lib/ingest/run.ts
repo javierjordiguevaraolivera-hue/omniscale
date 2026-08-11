@@ -111,22 +111,33 @@ const keyDeWindsor = (conn: Connection) =>
  * se descartan y por qué: es lo que se ve en la pantalla /logs.
  */
 /**
- * Qué fuentes consultar en esta corrida. Medido sobre el historial guardado:
- * Everflow refleja cada conversión en minutos, pero Windsor actualiza el gasto
- * cada ~6 horas. Por eso se pueden pedir por separado y correr con cadencias
- * distintas (ver vercel.json).
+ * Fuentes que se pueden pedir en una corrida. Se separan porque cada una tiene
+ * su propio ritmo (ver vercel.json):
+ *   - `everflow` y `facebook` son APIs propias sin límite práctico: cada 2 min.
+ *   - `windsor` sirve su copia cacheada y solo la refresca cada ~6 h, así que
+ *     consultarla cada 2 min sería tirar llamadas a la basura.
  */
-export type Fuentes = "todo" | "everflow" | "gasto";
+export const FUENTES = ["everflow", "facebook", "windsor", "zernio"] as const;
+export type Fuente = (typeof FUENTES)[number];
+
+/** Lista de fuentes de una corrida. Vacía o inválida = todas. */
+export function parsearFuentes(raw: string | null | undefined): Set<Fuente> {
+  const pedidas = (raw ?? "")
+    .split(/[,\s]+/)
+    .map((s) => s.toLowerCase().trim())
+    .filter((s): s is Fuente => (FUENTES as readonly string[]).includes(s));
+  return pedidas.length > 0 ? new Set(pedidas) : new Set(FUENTES);
+}
 
 /** Señal interna para omitir la consolidación en corridas parciales. */
 class SaltarRollup extends Error {}
 
 export async function runIngest(
   origen: "cron" | "manual" = "cron",
-  fuentes: Fuentes = "todo",
+  fuentes: Set<Fuente> = new Set(FUENTES),
 ): Promise<IngestResult> {
-  const pideEverflow = fuentes === "todo" || fuentes === "everflow";
-  const pideGasto = fuentes === "todo" || fuentes === "gasto";
+  const completa = FUENTES.every((f) => fuentes.has(f));
+  const pideEverflow = fuentes.has("everflow");
   const admin = createAdminClient();
   const errors: string[] = [];
   const detalle: DetalleFuente[] = [];
@@ -152,9 +163,15 @@ export async function runIngest(
   const efConn = pideEverflow
     ? conns.find((c) => c.platform === "everflow")
     : undefined;
-  const fbConns = pideGasto ? conns.filter((c) => c.platform === "facebook") : [];
-  const wsConns = pideGasto ? conns.filter((c) => c.platform === "windsor") : [];
-  const zeConns = pideGasto ? conns.filter((c) => c.platform === "zernio") : [];
+  const fbConns = fuentes.has("facebook")
+    ? conns.filter((c) => c.platform === "facebook")
+    : [];
+  const wsConns = fuentes.has("windsor")
+    ? conns.filter((c) => c.platform === "windsor")
+    : [];
+  const zeConns = fuentes.has("zernio")
+    ? conns.filter((c) => c.platform === "zernio")
+    : [];
 
   // Exclusiones de Facebook: se leen EN CADA CORRIDA, así que excluir o volver
   // a incluir una cuenta aplica en la medición siguiente.
@@ -511,7 +528,7 @@ export async function runIngest(
   // gasto, y con una sola de las dos quedaría un resumen a medias.
   const rollupDays: string[] = [];
   try {
-    if (fuentes !== "todo") throw new SaltarRollup();
+    if (!completa) throw new SaltarRollup();
     const yesterday = shiftDay(day, -1);
     const rolled = await rollupDayIfMissing(
       admin,

@@ -3,6 +3,7 @@ import { Facebook } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { toggleExclusionCuenta } from "@/app/actions";
 import { PageHeader, Panel } from "@/components/panel";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { num } from "@/lib/format";
 
@@ -40,7 +41,7 @@ const ESTADOS: Record<number, string> = {
   102: "Cualquier cerrada",
 };
 
-export default async function VMsPage() {
+export default async function BMsPage() {
   const supabase = await createClient();
   const [connRes, cuentasRes] = await Promise.all([
     supabase
@@ -56,14 +57,14 @@ export default async function VMsPage() {
       .order("account_name"),
   ]);
 
-  const vms = (connRes.data ?? []) as Conexion[];
+  const bms = (connRes.data ?? []) as Conexion[];
   const cuentas = (cuentasRes.data ?? []) as Cuenta[];
   const faltaTabla = Boolean(cuentasRes.error);
 
-  const porVM = new Map<string, Cuenta[]>();
+  const porBM = new Map<string, Cuenta[]>();
   for (const c of cuentas) {
-    if (!porVM.has(c.connection_id)) porVM.set(c.connection_id, []);
-    porVM.get(c.connection_id)!.push(c);
+    if (!porBM.has(c.connection_id)) porBM.set(c.connection_id, []);
+    porBM.get(c.connection_id)!.push(c);
   }
 
   const totalExcluidas = cuentas.filter((c) => c.excluida).length;
@@ -73,7 +74,9 @@ export default async function VMsPage() {
       <PageHeader
         titulo="BMs de Facebook"
         descripcion="Un BM por token. Las cuentas se descubren solas en cada corrida. Excluir una cuenta la deja fuera del gasto y del reporte desde la medición siguiente; el histórico ya guardado no cambia."
-      />
+      >
+        <AutoRefresh segundos={120} />
+      </PageHeader>
 
       {faltaTabla && (
         <div className="rounded-xl border border-error bg-error-container p-md text-body-md">
@@ -86,7 +89,7 @@ export default async function VMsPage() {
         </div>
       )}
 
-      {vms.length === 0 && !faltaTabla && (
+      {bms.length === 0 && !faltaTabla && (
         <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-md text-body-md">
           <p className="font-semibold text-on-surface">Sin BMs registrados</p>
           <p className="mt-1 text-on-surface-variant">
@@ -105,18 +108,18 @@ export default async function VMsPage() {
         </p>
       )}
 
-      {vms.map((vm) => {
-        const lista = porVM.get(vm.id) ?? [];
+      {bms.map((bm) => {
+        const lista = porBM.get(bm.id) ?? [];
         const excluidas = lista.filter((c) => c.excluida).length;
         return (
           <Panel
-            key={vm.id}
-            titulo={vm.label}
+            key={bm.id}
+            titulo={bm.label}
             icono={<Facebook className="h-5 w-5" />}
             acciones={
               <div className="flex flex-wrap items-center gap-2 text-label-sm text-on-surface-variant">
                 <span>
-                  BM {vm.business_id ?? "— (todas las del token)"}
+                  BM {bm.business_id ?? "— (todas las del token)"}
                 </span>
                 <span>·</span>
                 <span>{lista.length} cuentas</span>
@@ -125,14 +128,14 @@ export default async function VMsPage() {
                     · {excluidas} excluidas
                   </span>
                 )}
-                {!vm.active && <span className="text-error">· pausado</span>}
+                {!bm.active && <span className="text-error">· pausado</span>}
               </div>
             }
           >
             <div className="p-md">
-              {vm.last_error && (
+              {bm.last_error && (
                 <p className="mb-md rounded-lg border border-error bg-error-container px-3 py-2 text-body-md">
-                  {vm.last_error.slice(0, 300)}
+                  {bm.last_error.slice(0, 300)}
                 </p>
               )}
 
