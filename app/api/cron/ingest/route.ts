@@ -11,6 +11,10 @@ export const maxDuration = 120;
  * propias sin límite práctico y van cada 2 minutos, mientras Windsor sirve una
  * copia que solo refresca cada ~6 horas.
  *
+ * `?rollup=1` consolida además el día de ayer y purga las capturas viejas. Va
+ * en un solo cron a propósito: si lo hicieran los dos, el de 2 minutos gastaría
+ * una consulta de más en cada corrida.
+ *
  * Vercel manda "Authorization: Bearer <CRON_SECRET>" automáticamente cuando la
  * env var CRON_SECRET está definida en el proyecto.
  */
@@ -20,12 +24,15 @@ export async function GET(request: Request) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const fuentes = parsearFuentes(
-    new URL(request.url).searchParams.get("fuentes"),
-  );
+  const params = new URL(request.url).searchParams;
+  const fuentes = parsearFuentes(params.get("fuentes"));
+  const rollup = params.get("rollup");
 
   try {
-    const result = await runIngest("cron", fuentes);
+    const result = await runIngest("cron", fuentes, {
+      // Sin el parámetro, decide la propia corrida (las completas consolidan).
+      rollup: rollup === null ? undefined : rollup === "1",
+    });
     return Response.json(result);
   } catch (e) {
     return Response.json(

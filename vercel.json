@@ -5,8 +5,8 @@
       "schedule": "*/2 * * * *"
     },
     {
-      "path": "/api/cron/ingest",
-      "schedule": "*/15 * * * *"
+      "path": "/api/cron/ingest?fuentes=windsor,zernio&rollup=1",
+      "schedule": "1,16,31,46 * * * *"
     }
   ]
 }

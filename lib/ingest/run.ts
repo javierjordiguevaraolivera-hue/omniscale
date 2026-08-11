@@ -78,6 +78,9 @@ export type IngestResult = {
   descartadas: number;
   sin_asignar: number;
   detalle: DetalleFuente[];
+  /** ¿Esta corrida se encargó de consolidar ayer y purgar? */
+  rollup: boolean;
+  /** Días que consolidó de verdad; vacío si ya estaban hechos. */
   rollup_days: string[];
   errors: string[];
 };
@@ -135,8 +138,13 @@ class SaltarRollup extends Error {}
 export async function runIngest(
   origen: "cron" | "manual" = "cron",
   fuentes: Set<Fuente> = new Set(FUENTES),
+  opciones: { rollup?: boolean } = {},
 ): Promise<IngestResult> {
   const completa = FUENTES.every((f) => fuentes.has(f));
+  // La consolidación de ayer no tiene que ver con las fuentes que trae ESTA
+  // corrida: siempre usa todas las conexiones. Por defecto la hacen las
+  // corridas completas (la manual), y un cron puede pedirla con ?rollup=1.
+  const haceRollup = opciones.rollup ?? completa;
   const pideEverflow = fuentes.has("everflow");
   const admin = createAdminClient();
   const errors: string[] = [];
@@ -524,19 +532,21 @@ export async function runIngest(
   }
 
   // --- 5. consolidación de ayer + purga ----------------------------------
-  // Solo en corridas completas: consolidar el día de ayer necesita revenue Y
-  // gasto, y con una sola de las dos quedaría un resumen a medias.
+  // Consolidar ayer vuelve a pedir el día a las APIs, así que necesita TODAS
+  // las conexiones, no solo las de esta corrida: con las filtradas quedaría un
+  // resumen a medias (p. ej. gasto de Facebook en cero) y como después ya
+  // existe la fila, nunca se recalcularía.
   const rollupDays: string[] = [];
   try {
-    if (!completa) throw new SaltarRollup();
+    if (!haceRollup) throw new SaltarRollup();
     const yesterday = shiftDay(day, -1);
     const rolled = await rollupDayIfMissing(
       admin,
       yesterday,
-      efConn,
-      fbConns,
-      wsConns,
-      zeConns,
+      conns.find((c) => c.platform === "everflow"),
+      conns.filter((c) => c.platform === "facebook"),
+      conns.filter((c) => c.platform === "windsor"),
+      conns.filter((c) => c.platform === "zernio"),
       efTzId,
     );
     if (rolled) rollupDays.push(yesterday);
@@ -557,6 +567,7 @@ export async function runIngest(
     descartadas,
     sin_asignar: sinAsignar,
     detalle,
+    rollup: haceRollup,
     rollup_days: rollupDays,
     errors,
   };
