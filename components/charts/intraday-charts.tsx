@@ -248,14 +248,15 @@ export function MoneyChart({ data }: { data: Point[] }) {
       key: "spend" as const,
       nombre: "Gasto",
       stroke: SERIES.spend,
-      dash: "6 4",
+      dash: undefined,
       grosor: 2,
     },
     {
+      // Discontinua: además del color, el trazo lo distingue de las otras dos.
       key: "profit" as const,
       nombre: "Profit / Pérdida",
       stroke: strokeProfit,
-      dash: undefined,
+      dash: "6 4",
       grosor: 2.5,
     },
   ];
@@ -269,25 +270,22 @@ export function MoneyChart({ data }: { data: Point[] }) {
             className="flex items-center gap-2 text-xs text-muted-foreground"
           >
             {s.key === "profit" ? (
-              // Muestra partida: el profit es verde arriba del cero y rojo abajo.
-              <span className="inline-flex overflow-hidden rounded-sm">
+              // Dos guiones: discontinua como en el gráfico, y partida porque
+              // el profit es verde arriba del cero y rojo abajo.
+              <span className="inline-flex items-center gap-0.5">
                 <span
-                  className="inline-block w-1.5 h-1.5"
+                  className="inline-block w-2 h-1.5 rounded-sm"
                   style={{ background: SERIES.ganancia }}
                 />
                 <span
-                  className="inline-block w-1.5 h-1.5"
+                  className="inline-block w-2 h-1.5 rounded-sm"
                   style={{ background: SERIES.perdida }}
                 />
               </span>
             ) : (
               <span
                 className="inline-block w-3 h-1.5 rounded-sm"
-                style={{
-                  background: s.dash
-                    ? `repeating-linear-gradient(90deg, ${s.stroke} 0 4px, transparent 4px 6px)`
-                    : s.stroke,
-                }}
+                style={{ background: s.stroke }}
               />
             )}
             {s.nombre}
