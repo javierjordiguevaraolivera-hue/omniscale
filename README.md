@@ -44,7 +44,7 @@ Un cron de Vercel llama a `/api/cron/ingest`, que:
 1. Pide a Everflow el reporte del día (una fila por oferta × source ID) →
    conversiones y revenue.
 2. Pide el gasto del día, en paralelo:
-   - **Facebook**: lógica propia contra la Graph API, un token por **VM**
+   - **Facebook**: lógica propia contra la Graph API, un token por **BM**
      (ver más abajo).
    - **Windsor.ai**: una sola API key, a nivel de **campaña**. Se llama **un
      endpoint por plataforma** (`/facebook`, `/tiktok`, `/google_ads`), no
@@ -95,10 +95,10 @@ publicitaria una vez en su panel, y desde el servidor solo se manda la key.
 Usa el mismo campo *scope* que Windsor. **No actives Zernio y Windsor para la
 misma plataforma**: el gasto se contaría dos veces.
 
-### Facebook: VMs y exclusiones
+### Facebook: BMs y exclusiones
 
 Facebook **no** pasa por Windsor. Se consulta la Graph API directamente, un token
-por VM, con el mismo flujo que ya funcionaba en n8n:
+por BM, con el mismo flujo que ya funcionaba en n8n:
 
 1. `GET /v23.0/{business_id}/owned_ad_accounts` → las cuentas del BM.
    Sin `business_id` cae a `/me/adaccounts` (todas las que alcance el token).
@@ -107,10 +107,10 @@ por VM, con el mismo flujo que ya funcionaba en n8n:
    con el rate limit.
 3. Las cuentas que no gastaron se descartan.
 
-Se registra un VM en *Conexiones* (nombre + Business ID opcional + token) y las
-cuentas aparecen solas en la pantalla **VMs** tras la primera corrida.
+Se registra un BM en *Conexiones* (nombre + Business ID opcional + token) y las
+cuentas aparecen solas en la pantalla **BMs** tras la primera corrida.
 
-**Exclusiones.** En *VMs*, cada cuenta tiene un botón Excluir / Incluir. La
+**Exclusiones.** En *BMs*, cada cuenta tiene un botón Excluir / Incluir. La
 tabla `fb_ad_accounts` se lee **en cada corrida**, así que:
 
 - Excluir deja la cuenta fuera del gasto y del reporte desde la medición
@@ -207,8 +207,8 @@ aparezca gasto.
 | Tabla | Para qué |
 |---|---|
 | `settings` | zona horaria, `timezone_id` de Everflow, días de retención |
-| `connections` | Everflow, VMs de Facebook (con `business_id`), Windsor y Zernio |
-| `fb_ad_accounts` | cuentas descubiertas por VM, con su `excluida` |
+| `connections` | Everflow, BMs de Facebook (con `business_id`), Windsor y Zernio |
+| `fb_ad_accounts` | cuentas descubiertas por BM, con su `excluida` |
 | `offers` | catálogo de ofertas (se llena solo desde Everflow) |
 | `spend_map` | plataforma × cuenta × campaña → oferta **actual**, y de dónde salió |
 | `snap_offer_source` | snapshots del día: conversiones y revenue por oferta × source |
@@ -249,7 +249,7 @@ consolidado no se borra nunca y ocupa muy poco.
    luego, para que nadie más se registre, desactivar *Allow new users to sign up*
    en Supabase → Authentication → Providers → Email.
 5. **Registrar credenciales** en `/connections`: la API key de Everflow, un token
-   de Facebook por cada app / VM, y la API key de Windsor (deja *Plataformas* en
+   de Facebook por cada app / BM, y la API key de Windsor (deja *Plataformas* en
    `tiktok`). Pulsa **Actualizar ahora** para la primera carga.
 6. **Revisar `/accounts`**: asignar oferta a las combinaciones que quedaron
    &ldquo;sin configurar&rdquo;.
@@ -265,7 +265,7 @@ solo se permite una ejecución diaria.
 | `/dashboard` | día en curso: KPIs, dos gráficos, resumen por plataforma, oferta × plataforma y gasto por campaña |
 | `/history` | histórico consolidado con rangos de 3, 7, 15 y 30 días |
 | `/accounts` | mapeo plataforma · cuenta · campaña → oferta |
-| `/vms` | VMs de Facebook: cuentas descubiertas y exclusiones |
+| `/bms` | BMs de Facebook: cuentas descubiertas y exclusiones |
 | `/connections` | credenciales de Everflow, Facebook y Windsor |
 | `/logs` | bitácora de cada corrida: filas recibidas, guardadas y descartadas por fuente |
 | `/settings` | zona horaria y retención |

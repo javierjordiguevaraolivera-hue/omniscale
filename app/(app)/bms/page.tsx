@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Facebook } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { excluirCuentasEnLote, toggleExclusionCuenta } from "@/app/actions";
+import { toggleExclusionCuenta } from "@/app/actions";
 import { PageHeader, Panel } from "@/components/panel";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { num } from "@/lib/format";
@@ -71,8 +71,8 @@ export default async function VMsPage() {
   return (
     <div className="flex flex-col gap-md">
       <PageHeader
-        titulo="VMs de Facebook"
-        descripcion="Un VM por token. Las cuentas se descubren solas en cada corrida. Excluir una cuenta la deja fuera del gasto y del reporte desde la medición siguiente; el histórico ya guardado no cambia."
+        titulo="BMs de Facebook"
+        descripcion="Un BM por token. Las cuentas se descubren solas en cada corrida. Excluir una cuenta la deja fuera del gasto y del reporte desde la medición siguiente; el histórico ya guardado no cambia."
       />
 
       {faltaTabla && (
@@ -88,13 +88,13 @@ export default async function VMsPage() {
 
       {vms.length === 0 && !faltaTabla && (
         <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-md text-body-md">
-          <p className="font-semibold text-on-surface">Sin VMs registrados</p>
+          <p className="font-semibold text-on-surface">Sin BMs registrados</p>
           <p className="mt-1 text-on-surface-variant">
             Agrega un token de Facebook en{" "}
             <Link href="/connections" className="text-brand-crimson underline">
               Conexiones
             </Link>
-            . Puedes poner uno por cada VM.
+            . Puedes poner uno por cada BM.
           </p>
         </div>
       )}

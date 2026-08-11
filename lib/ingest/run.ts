@@ -21,7 +21,7 @@ type Connection = {
   api_key: string;
   scope: string | null;
   refresh_interval: string | null;
-  /** Solo Facebook: Business Manager del VM. */
+  /** Solo Facebook: Business Manager del BM. */
   business_id: string | null;
   active: boolean;
 };
@@ -233,7 +233,7 @@ export async function runIngest(
   const spendRows: SpendRow[] = [];
   let descartadas = 0;
 
-  // Facebook: lógica propia. Un VM por conexión, nivel de cuenta.
+  // Facebook: lógica propia. Un BM por conexión, nivel de cuenta.
   for (let i = 0; i < fbConns.length; i++) {
     const conn = fbConns[i];
     const settled = spendSettled[i];
@@ -255,7 +255,7 @@ export async function runIngest(
 
     const res = settled.value as Awaited<ReturnType<typeof fetchFacebookVM>>;
 
-    // Catálogo de cuentas del VM: alimenta la pantalla donde se excluyen.
+    // Catálogo de cuentas del BM: alimenta la pantalla donde se excluyen.
     await sincronizarCuentasFb(admin, conn.id, res.cuentas, capturedAt, errors);
 
     for (const acc of res.gasto) {
@@ -584,7 +584,7 @@ async function guardarBitacora(
 }
 
 /**
- * Guarda las cuentas que tiene el VM, sin tocar el `excluida` que eligió Antony.
+ * Guarda las cuentas que tiene el BM, sin tocar el `excluida` que eligió Antony.
  * El upsert solo escribe nombre/moneda/estado, así que una cuenta excluida sigue
  * excluida aunque cambie de nombre en Facebook.
  */

@@ -18,7 +18,7 @@ export type FacebookAccountSpend = {
 };
 
 export type FacebookVMResultado = {
-  /** Todas las cuentas del VM, excluidas incluidas: es el catálogo de la UI. */
+  /** Todas las cuentas del BM, excluidas incluidas: es el catálogo de la UI. */
   cuentas: FacebookAccount[];
   /** Gasto de hoy, solo de las cuentas NO excluidas y con gasto > 0. */
   gasto: FacebookAccountSpend[];
@@ -42,7 +42,7 @@ async function graph(url: string, token: string) {
 }
 
 /**
- * Cuentas publicitarias del VM.
+ * Cuentas publicitarias del BM.
  *
  * Con `businessId` usa `/{business_id}/owned_ad_accounts`, que es exactamente
  * lo que hace el flujo de n8n: solo las cuentas que ese BM posee. Sin él, cae a
@@ -120,7 +120,7 @@ async function enTandas<T, R>(
 }
 
 /**
- * Flujo completo de un VM: lista sus cuentas, pide el gasto del día de las que
+ * Flujo completo de un BM: lista sus cuentas, pide el gasto del día de las que
  * NO están excluidas, y descarta las que no gastaron.
  *
  * `excluidas` se pasa desde la base en cada corrida, así que excluir o volver a

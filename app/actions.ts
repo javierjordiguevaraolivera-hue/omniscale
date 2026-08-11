@@ -210,7 +210,7 @@ export async function assignOffer(_previo: string | null, formData: FormData) {
 }
 
 /**
- * Excluye o vuelve a incluir una cuenta publicitaria de un VM de Facebook.
+ * Excluye o vuelve a incluir una cuenta publicitaria de un BM de Facebook.
  * Se lee en cada corrida, así que aplica desde la medición siguiente. El
  * histórico ya guardado no se toca.
  */
@@ -231,62 +231,11 @@ export async function toggleExclusionCuenta(
       .eq("connection_id", connectionId)
       .eq("account_id", accountId);
     if (error) throw error;
-    revalidatePath("/vms");
+    revalidatePath("/bms");
     revalidatePath("/dashboard");
   });
 }
 
-/**
- * Excluye (o vuelve a incluir) varias cuentas de un VM pegando sus IDs.
- *
- * Hace upsert, no update: así se puede excluir una cuenta ANTES de que la
- * corrida la descubra. Cuando aparezca, se le rellena el nombre y su exclusión
- * se respeta.
- */
-export async function excluirCuentasEnLote(
-  _previo: string | null,
-  formData: FormData,
-) {
-  return conManejoDeError(async () => {
-    const connectionId = String(formData.get("connection_id") ?? "");
-    const modo = String(formData.get("modo") ?? "excluir");
-    const crudo = String(formData.get("ids") ?? "");
-    if (!connectionId) throw new Error("Falta el VM");
-
-    // Acepta comas, espacios, saltos de línea y el prefijo act_
-    const ids = [
-      ...new Set(
-        crudo
-          .split(/[\s,;]+/)
-          .map((s) => s.trim().replace(/^act_/i, ""))
-          .filter(Boolean),
-      ),
-    ];
-    if (ids.length === 0) throw new Error("No pegaste ningún ID de cuenta");
-
-    const noNumericos = ids.filter((id) => !/^\d{5,25}$/.test(id));
-    if (noNumericos.length > 0) {
-      throw new Error(
-        `Estos no parecen IDs de cuenta: ${noNumericos.slice(0, 5).join(", ")}`,
-      );
-    }
-
-    const admin = createAdminClient();
-    const ahora = new Date().toISOString();
-    const { error } = await admin.from("fb_ad_accounts").upsert(
-      ids.map((account_id) => ({
-        connection_id: connectionId,
-        account_id,
-        excluida: modo === "excluir",
-        updated_at: ahora,
-      })),
-      { onConflict: "connection_id,account_id", ignoreDuplicates: false },
-    );
-    if (error) throw error;
-    revalidatePath("/vms");
-    revalidatePath("/dashboard");
-  });
-}
 
 /** Botón "Actualizar ahora": dispara una corrida de ingesta manual. */
 export async function runIngestNow() {

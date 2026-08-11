@@ -1,6 +1,6 @@
 /**
  * Plataformas que aporta Windsor si la conexión no dice otra cosa.
- * Facebook NO está: entra por lógica propia (Graph API, un token por VM). Si se
+ * Facebook NO está: entra por lógica propia (Graph API, un token por BM). Si se
  * marcara aquí también, el gasto se contaría dos veces.
  */
 export const SCOPE_WINDSOR_DEFAULT = "tiktok,google";

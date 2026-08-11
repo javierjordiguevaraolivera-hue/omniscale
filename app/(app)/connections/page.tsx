@@ -137,12 +137,12 @@ export default async function ConnectionsPage() {
       >
         <div className="p-md">
           <p className="mb-md text-label-sm text-on-surface-variant">
-            Un token por VM: agrega tantos como tengas. Con el token se listan las
+            Un token por BM: agrega tantos como tengas. Con el token se listan las
             cuentas del Business Manager y se pide el gasto del día de cada una,
             descartando las que no gastaron. Las cuentas descubiertas y sus
             exclusiones se gestionan en{" "}
-            <Link href="/vms" className="text-brand-crimson underline">
-              VMs
+            <Link href="/bms" className="text-brand-crimson underline">
+              BMs
             </Link>
             . La oferta se detecta del número en el nombre de la cuenta.
           </p>
@@ -151,10 +151,10 @@ export default async function ConnectionsPage() {
             <input type="hidden" name="platform" value="facebook" />
             <div className="grid gap-3 sm:grid-cols-[1fr_1fr_2fr_auto]">
               <label className="grid gap-1.5">
-                <span className={labelClass}>Nombre del VM</span>
+                <span className={labelClass}>Nombre del BM</span>
                 <input
                   name="label"
-                  placeholder="VM1 · BM Marcelo"
+                  placeholder="BM Marcelo"
                   autoComplete="off"
                   className={inputClass}
                 />
@@ -180,7 +180,7 @@ export default async function ConnectionsPage() {
                 />
               </label>
               <div className="flex items-end">
-                <SubmitButton className={botonClass}>Agregar VM</SubmitButton>
+                <SubmitButton className={botonClass}>Agregar BM</SubmitButton>
               </div>
             </div>
             <p className="text-label-sm text-on-surface-variant">
