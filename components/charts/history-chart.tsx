@@ -21,7 +21,9 @@ export type HistoryPoint = {
 };
 
 const INK = { muted: "#898781", axis: "#c3c2b7" };
-const POS = "#2a78d6"; // azul: profit
+// Mismos verde y rojo que el profit del panel: en toda la app verde = profit y
+// rojo = pérdida. El azul queda reservado para el revenue.
+const POS = "#0ca30c"; // verde: profit
 const NEG = "#d03b3b"; // rojo: pérdida
 
 /** Profit por día: barra divergente sobre la línea de cero. */
