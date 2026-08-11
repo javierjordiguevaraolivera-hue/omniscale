@@ -1,11 +1,15 @@
-/** Plataformas que aporta Windsor si la conexión no dice otra cosa. */
-export const SCOPE_WINDSOR_DEFAULT = "facebook,tiktok,google";
+/**
+ * Plataformas que aporta Windsor si la conexión no dice otra cosa.
+ * Facebook NO está: entra por lógica propia (Graph API, un token por VM). Si se
+ * marcara aquí también, el gasto se contaría dos veces.
+ */
+export const SCOPE_WINDSOR_DEFAULT = "tiktok,google";
 
 /** Plataformas que ofrecemos como opción en la pantalla de Conexiones. */
 export const PLATAFORMAS_WINDSOR = [
-  "facebook",
   "tiktok",
   "google",
+  "facebook",
   "snapchat",
   "bing",
   "linkedin",

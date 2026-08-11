@@ -2,6 +2,7 @@
 
 import {
   CalendarRange,
+  Facebook,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -27,6 +28,7 @@ const navItems: {
   { label: "Panel", href: "/dashboard", icon: LayoutDashboard },
   { label: "Histórico", href: "/history", icon: CalendarRange },
   { label: "Cuentas", href: "/accounts", icon: Wallet },
+  { label: "VMs", href: "/vms", icon: Facebook },
   { label: "Conexiones", href: "/connections", icon: KeyRound },
   { label: "Logs", href: "/logs", icon: ScrollText },
   { label: "Ajustes", href: "/settings", icon: Settings },

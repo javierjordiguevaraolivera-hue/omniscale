@@ -44,7 +44,8 @@ Un cron de Vercel llama a `/api/cron/ingest`, que:
 1. Pide a Everflow el reporte del día (una fila por oferta × source ID) →
    conversiones y revenue.
 2. Pide el gasto del día, en paralelo:
-   - **Facebook**: un token por app / BM, a nivel de **cuenta**.
+   - **Facebook**: lógica propia contra la Graph API, un token por **VM**
+     (ver más abajo).
    - **Windsor.ai**: una sola API key, a nivel de **campaña**. Se llama **un
      endpoint por plataforma** (`/facebook`, `/tiktok`, `/google_ads`), no
      `/all`: se pide solo lo configurado, así que no hay forma de descartar
@@ -93,6 +94,36 @@ publicitaria una vez en su panel, y desde el servidor solo se manda la key.
 
 Usa el mismo campo *scope* que Windsor. **No actives Zernio y Windsor para la
 misma plataforma**: el gasto se contaría dos veces.
+
+### Facebook: VMs y exclusiones
+
+Facebook **no** pasa por Windsor. Se consulta la Graph API directamente, un token
+por VM, con el mismo flujo que ya funcionaba en n8n:
+
+1. `GET /v23.0/{business_id}/owned_ad_accounts` → las cuentas del BM.
+   Sin `business_id` cae a `/me/adaccounts` (todas las que alcance el token).
+2. Por cada cuenta no excluida: `GET /v23.0/act_{id}/insights?level=account`
+   con `time_range` del día → su gasto. Se piden en tandas de 8 para no chocar
+   con el rate limit.
+3. Las cuentas que no gastaron se descartan.
+
+Se registra un VM en *Conexiones* (nombre + Business ID opcional + token) y las
+cuentas aparecen solas en la pantalla **VMs** tras la primera corrida.
+
+**Exclusiones.** En *VMs*, cada cuenta tiene un botón Excluir / Incluir. La
+tabla `fb_ad_accounts` se lee **en cada corrida**, así que:
+
+- Excluir deja la cuenta fuera del gasto y del reporte desde la medición
+  siguiente, y además ahorra la llamada a la API.
+- Volver a incluirla la reactiva igual de rápido.
+- El histórico ya guardado **no cambia** — mismo criterio que el efecto
+  screenshot de las ofertas.
+- Renombrar una cuenta en Facebook no pierde su exclusión: la clave es el
+  `account_id`, no el nombre.
+
+Como Facebook ya entra por aquí, **no debe estar en el scope de Windsor**: si
+está en los dos, la corrida se marca como error porque el gasto se contaría
+doble. La migración `0006` limpia el scope de las conexiones existentes.
 
 ### Plataformas de Windsor
 
@@ -176,7 +207,8 @@ aparezca gasto.
 | Tabla | Para qué |
 |---|---|
 | `settings` | zona horaria, `timezone_id` de Everflow, días de retención |
-| `connections` | Everflow, tokens de Facebook, Windsor y Zernio (con su `scope`) |
+| `connections` | Everflow, VMs de Facebook (con `business_id`), Windsor y Zernio |
+| `fb_ad_accounts` | cuentas descubiertas por VM, con su `excluida` |
 | `offers` | catálogo de ofertas (se llena solo desde Everflow) |
 | `spend_map` | plataforma × cuenta × campaña → oferta **actual**, y de dónde salió |
 | `snap_offer_source` | snapshots del día: conversiones y revenue por oferta × source |
@@ -233,6 +265,7 @@ solo se permite una ejecución diaria.
 | `/dashboard` | día en curso: KPIs, dos gráficos, resumen por plataforma, oferta × plataforma y gasto por campaña |
 | `/history` | histórico consolidado con rangos de 3, 7, 15 y 30 días |
 | `/accounts` | mapeo plataforma · cuenta · campaña → oferta |
+| `/vms` | VMs de Facebook: cuentas descubiertas y exclusiones |
 | `/connections` | credenciales de Everflow, Facebook y Windsor |
 | `/logs` | bitácora de cada corrida: filas recibidas, guardadas y descartadas por fuente |
 | `/settings` | zona horaria y retención |

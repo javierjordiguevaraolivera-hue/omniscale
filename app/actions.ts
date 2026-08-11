@@ -47,6 +47,16 @@ export async function addConnection(_previo: string | null, formData: FormData) 
 
     let scope: string | null = null;
     let refreshInterval: string | null = null;
+    let businessId: string | null = null;
+    if (platform === "facebook") {
+      const bid = String(formData.get("business_id") ?? "").trim();
+      if (bid && !/^\d{5,25}$/.test(bid)) {
+        throw new Error(
+          "El Business ID debe ser solo números (lo ves en la URL del Business Manager). Déjalo vacío para usar todas las cuentas del token.",
+        );
+      }
+      businessId = bid || null;
+    }
     if (platform === "zernio") {
       const limpio = sanearScope(String(formData.get("scope") ?? ""));
       if (limpio.invalidos.length > 0) {
@@ -79,9 +89,11 @@ export async function addConnection(_previo: string | null, formData: FormData) 
       api_key: apiKey,
       scope,
       refresh_interval: refreshInterval,
+      business_id: businessId,
     });
     if (error) throw error;
     revalidatePath("/connections");
+    revalidatePath("/accounts");
   });
 }
 
@@ -193,6 +205,85 @@ export async function assignOffer(_previo: string | null, formData: FormData) {
       .eq("campaign", campaign);
     if (error) throw error;
     revalidatePath("/accounts");
+    revalidatePath("/dashboard");
+  });
+}
+
+/**
+ * Excluye o vuelve a incluir una cuenta publicitaria de un VM de Facebook.
+ * Se lee en cada corrida, así que aplica desde la medición siguiente. El
+ * histórico ya guardado no se toca.
+ */
+export async function toggleExclusionCuenta(
+  _previo: string | null,
+  formData: FormData,
+) {
+  return conManejoDeError(async () => {
+    const connectionId = String(formData.get("connection_id") ?? "");
+    const accountId = String(formData.get("account_id") ?? "");
+    const excluida = String(formData.get("excluida") ?? "") === "true";
+    if (!connectionId || !accountId) throw new Error("Faltan datos de la cuenta");
+
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("fb_ad_accounts")
+      .update({ excluida: !excluida, updated_at: new Date().toISOString() })
+      .eq("connection_id", connectionId)
+      .eq("account_id", accountId);
+    if (error) throw error;
+    revalidatePath("/vms");
+    revalidatePath("/dashboard");
+  });
+}
+
+/**
+ * Excluye (o vuelve a incluir) varias cuentas de un VM pegando sus IDs.
+ *
+ * Hace upsert, no update: así se puede excluir una cuenta ANTES de que la
+ * corrida la descubra. Cuando aparezca, se le rellena el nombre y su exclusión
+ * se respeta.
+ */
+export async function excluirCuentasEnLote(
+  _previo: string | null,
+  formData: FormData,
+) {
+  return conManejoDeError(async () => {
+    const connectionId = String(formData.get("connection_id") ?? "");
+    const modo = String(formData.get("modo") ?? "excluir");
+    const crudo = String(formData.get("ids") ?? "");
+    if (!connectionId) throw new Error("Falta el VM");
+
+    // Acepta comas, espacios, saltos de línea y el prefijo act_
+    const ids = [
+      ...new Set(
+        crudo
+          .split(/[\s,;]+/)
+          .map((s) => s.trim().replace(/^act_/i, ""))
+          .filter(Boolean),
+      ),
+    ];
+    if (ids.length === 0) throw new Error("No pegaste ningún ID de cuenta");
+
+    const noNumericos = ids.filter((id) => !/^\d{5,25}$/.test(id));
+    if (noNumericos.length > 0) {
+      throw new Error(
+        `Estos no parecen IDs de cuenta: ${noNumericos.slice(0, 5).join(", ")}`,
+      );
+    }
+
+    const admin = createAdminClient();
+    const ahora = new Date().toISOString();
+    const { error } = await admin.from("fb_ad_accounts").upsert(
+      ids.map((account_id) => ({
+        connection_id: connectionId,
+        account_id,
+        excluida: modo === "excluir",
+        updated_at: ahora,
+      })),
+      { onConflict: "connection_id,account_id", ignoreDuplicates: false },
+    );
+    if (error) throw error;
+    revalidatePath("/vms");
     revalidatePath("/dashboard");
   });
 }

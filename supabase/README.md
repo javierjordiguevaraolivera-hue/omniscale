@@ -24,7 +24,8 @@ escrito y se puede leer en orden.
 | `0002_registro_migraciones.sql` | **Ejecutado** | Crea el registro `omni_migraciones` |
 | `0003_refresh_interval_windsor.sql` | **Ejecutado** | `connections.refresh_interval` para controlar el refresco de Windsor |
 | `0004_conexion_zernio.sql` | **Ejecutado** | Permite `platform=zernio` en `connections` |
-| `0005_serie_arrastra_valores.sql` | **Pendiente** | `intraday_series` arrastra el último valor conocido (para las dos cadencias) |
+| `0005_serie_arrastra_valores.sql` | **Ejecutado** | `intraday_series` arrastra el último valor conocido (para las dos cadencias) |
+| `0006_facebook_propio_y_exclusiones.sql` | **Ejecutado** | `connections.business_id` + tabla `fb_ad_accounts` con exclusiones por VM |
 
 ## Convenciones
 

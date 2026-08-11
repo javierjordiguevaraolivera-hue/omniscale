@@ -1,5 +1,5 @@
 -- ============================================================
--- 0005_serie_arrastra_valores · PENDIENTE
+-- 0005_serie_arrastra_valores · Ejecutado
 --
 -- Prepara `intraday_series` para que Everflow y el gasto se consulten con
 -- FRECUENCIAS DISTINTAS.

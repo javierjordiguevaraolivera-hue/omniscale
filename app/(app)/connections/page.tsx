@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Facebook, KeyRound, Wallet, Zap } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -21,6 +22,7 @@ type Connection = {
   api_key: string;
   scope: string | null;
   refresh_interval: string | null;
+  business_id: string | null;
   active: boolean;
   last_ok_at: string | null;
   last_error: string | null;
@@ -135,33 +137,56 @@ export default async function ConnectionsPage() {
       >
         <div className="p-md">
           <p className="mb-md text-label-sm text-on-surface-variant">
-            Un token por app / Business Manager: agrega tantos como VMs tengas.
-            Las cuentas de todos se juntan en una sola lista. La oferta se detecta
-            del <code>oid_&lt;ID&gt;</code> en el nombre de la cuenta.
+            Un token por VM: agrega tantos como tengas. Con el token se listan las
+            cuentas del Business Manager y se pide el gasto del día de cada una,
+            descartando las que no gastaron. Las cuentas descubiertas y sus
+            exclusiones se gestionan en{" "}
+            <Link href="/vms" className="text-brand-crimson underline">
+              VMs
+            </Link>
+            . La oferta se detecta del número en el nombre de la cuenta.
           </p>
           <TablaConexiones conns={facebook} />
-          <ActionForm
-            accion={addConnection}
-            className="mt-md grid gap-3 sm:grid-cols-[1fr_2fr_auto]"
-          >
+          <ActionForm accion={addConnection} className="mt-md flex flex-col gap-3">
             <input type="hidden" name="platform" value="facebook" />
-            <label className="grid gap-1.5">
-              <span className={labelClass}>Etiqueta</span>
-              <input name="label" placeholder="VM1 / BM Seguros" className={inputClass} />
-            </label>
-            <label className="grid gap-1.5">
-              <span className={labelClass}>Access token</span>
-              <input
-                name="api_key"
-                type="password"
-                required
-                placeholder="••••••"
-                className={inputClass}
-              />
-            </label>
-            <div className="flex items-end">
-              <SubmitButton className={botonClass}>Agregar</SubmitButton>
+            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_2fr_auto]">
+              <label className="grid gap-1.5">
+                <span className={labelClass}>Nombre del VM</span>
+                <input
+                  name="label"
+                  placeholder="VM1 · BM Marcelo"
+                  autoComplete="off"
+                  className={inputClass}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className={labelClass}>Business ID (opcional)</span>
+                <input
+                  name="business_id"
+                  placeholder="170678730571721"
+                  autoComplete="off"
+                  className={inputClass}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className={labelClass}>Access token</span>
+                <input
+                  name="api_key"
+                  type="password"
+                  required
+                  placeholder="••••••"
+                  autoComplete="new-password"
+                  className={inputClass}
+                />
+              </label>
+              <div className="flex items-end">
+                <SubmitButton className={botonClass}>Agregar VM</SubmitButton>
+              </div>
             </div>
+            <p className="text-label-sm text-on-surface-variant">
+              El Business ID sale de la URL del Business Manager. Si lo dejas
+              vacío se usan todas las cuentas que alcance el token.
+            </p>
           </ActionForm>
         </div>
       </Panel>

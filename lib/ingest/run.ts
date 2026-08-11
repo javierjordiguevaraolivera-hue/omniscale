@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchEverflowDay, type EverflowRow } from "@/lib/ingest/everflow";
 import { fetchWindsorDay } from "@/lib/ingest/windsor";
 import { fetchZernioDay } from "@/lib/ingest/zernio";
-import { fetchFacebookSpend } from "@/lib/ingest/facebook";
+import { fetchFacebookVM, type FacebookAccount } from "@/lib/ingest/facebook";
 import { resolverOferta, type OrigenMapeo } from "@/lib/offer-id";
 import {
   datasourcePermitido,
@@ -21,6 +21,8 @@ type Connection = {
   api_key: string;
   scope: string | null;
   refresh_interval: string | null;
+  /** Solo Facebook: Business Manager del VM. */
+  business_id: string | null;
   active: boolean;
 };
 
@@ -58,6 +60,8 @@ export type DetalleFuente = {
   /** Datasources que el scope dejó fuera, con su conteo. */
   descartados_por_scope?: Record<string, number>;
   scope?: string;
+  /** Cuentas que se saltaron por estar excluidas (solo Facebook). */
+  cuentas_excluidas?: number;
   /** Plataformas pedidas que aún no están conectadas en la fuente. */
   sin_cuenta?: string[];
   /** Cuándo dice la fuente que sincronizó por última vez (solo Zernio). */
@@ -152,12 +156,38 @@ export async function runIngest(
   const wsConns = pideGasto ? conns.filter((c) => c.platform === "windsor") : [];
   const zeConns = pideGasto ? conns.filter((c) => c.platform === "zernio") : [];
 
+  // Exclusiones de Facebook: se leen EN CADA CORRIDA, así que excluir o volver
+  // a incluir una cuenta aplica en la medición siguiente.
+  const excluidasPorConexion = new Map<string, Set<string>>();
+  if (fbConns.length > 0) {
+    const { data: reglas } = await admin
+      .from("fb_ad_accounts")
+      .select("connection_id,account_id,excluida")
+      .eq("excluida", true);
+    for (const r of (reglas ?? []) as {
+      connection_id: string;
+      account_id: string;
+    }[]) {
+      if (!excluidasPorConexion.has(r.connection_id)) {
+        excluidasPorConexion.set(r.connection_id, new Set());
+      }
+      excluidasPorConexion.get(r.connection_id)!.add(r.account_id);
+    }
+  }
+
   // --- 1 y 2 en paralelo -------------------------------------------------
   const [efSettled, ...spendSettled] = await Promise.allSettled([
     efConn
       ? fetchEverflowDay(efConn.api_key, day, efTzId)
       : Promise.resolve([] as EverflowRow[]),
-    ...fbConns.map((c) => fetchFacebookSpend(c.api_key, day, day)),
+    ...fbConns.map((c) =>
+      fetchFacebookVM(
+        c.api_key,
+        c.business_id,
+        day,
+        excluidasPorConexion.get(c.id) ?? new Set<string>(),
+      ),
+    ),
     ...wsConns.map((c) =>
       fetchWindsorDay(
         keyDeWindsor(c),
@@ -203,7 +233,7 @@ export async function runIngest(
   const spendRows: SpendRow[] = [];
   let descartadas = 0;
 
-  // Facebook: nivel cuenta, datasource fijo.
+  // Facebook: lógica propia. Un VM por conexión, nivel de cuenta.
   for (let i = 0; i < fbConns.length; i++) {
     const conn = fbConns[i];
     const settled = spendSettled[i];
@@ -222,28 +252,48 @@ export async function runIngest(
       });
       continue;
     }
-    const cuentas = settled.value as Awaited<
-      ReturnType<typeof fetchFacebookSpend>
-    >;
-    for (const acc of cuentas) {
+
+    const res = settled.value as Awaited<ReturnType<typeof fetchFacebookVM>>;
+
+    // Catálogo de cuentas del VM: alimenta la pantalla donde se excluyen.
+    await sincronizarCuentasFb(admin, conn.id, res.cuentas, capturedAt, errors);
+
+    for (const acc of res.gasto) {
       spendRows.push({
         datasource: "facebook",
-        account_name: acc.name || acc.account_id,
+        account_name: acc.account_name,
         campaign: "",
-        clicks: acc.clicks,
+        clicks: 0, // el gasto de Facebook se pide a nivel de cuenta, sin clicks
         spend: acc.spend,
       });
     }
-    await markConnection(admin, conn.id, null);
+
+    const motivos = Object.entries(res.fallos);
+    for (const [cuenta, msg] of motivos) {
+      errors.push(`facebook [${conn.label}] ${cuenta}: ${mensajeDeError(msg)}`);
+    }
+
+    await markConnection(
+      admin,
+      conn.id,
+      motivos.length > 0
+        ? motivos.map(([c, m]) => `${c}: ${m}`).join(" | ").slice(0, 500)
+        : null,
+    );
     detalle.push({
       fuente: "facebook",
       etiqueta: conn.label,
-      estado: "ok",
-      recibidas: cuentas.length,
-      aceptadas: cuentas.length,
-      descartadas: 0,
-      gasto: cuentas.reduce((a, x) => a + x.spend, 0),
-      por_datasource: { facebook: cuentas.length },
+      estado: motivos.length > 0 ? "error" : "ok",
+      recibidas: res.cuentas.length,
+      aceptadas: res.gasto.length,
+      descartadas: res.excluidas,
+      gasto: res.gasto.reduce((a, x) => a + x.spend, 0),
+      por_datasource: { facebook: res.gasto.length },
+      cuentas_excluidas: res.excluidas > 0 ? res.excluidas : undefined,
+      error:
+        motivos.length > 0
+          ? motivos.map(([c, m]) => `${c}: ${mensajeDeError(m)}`).join(" | ")
+          : undefined,
     });
   }
 
@@ -533,6 +583,47 @@ async function guardarBitacora(
   }
 }
 
+/**
+ * Guarda las cuentas que tiene el VM, sin tocar el `excluida` que eligió Antony.
+ * El upsert solo escribe nombre/moneda/estado, así que una cuenta excluida sigue
+ * excluida aunque cambie de nombre en Facebook.
+ */
+async function sincronizarCuentasFb(
+  admin: Admin,
+  connectionId: string,
+  cuentas: FacebookAccount[],
+  capturedAt: string,
+  errors: string[],
+) {
+  if (cuentas.length === 0) return;
+
+  const { data: previas } = await admin
+    .from("fb_ad_accounts")
+    .select("account_id,excluida")
+    .eq("connection_id", connectionId);
+  const excluidaPrevia = new Map(
+    ((previas ?? []) as { account_id: string; excluida: boolean }[]).map((p) => [
+      p.account_id,
+      p.excluida,
+    ]),
+  );
+
+  const { error } = await admin.from("fb_ad_accounts").upsert(
+    cuentas.map((c) => ({
+      connection_id: connectionId,
+      account_id: c.account_id,
+      account_name: c.account_name,
+      currency: c.currency,
+      timezone_name: c.timezone_name,
+      account_status: c.account_status,
+      // Se respeta lo que ya estaba; una cuenta nueva entra incluida.
+      excluida: excluidaPrevia.get(c.account_id) ?? false,
+      updated_at: capturedAt,
+    })),
+  );
+  if (error) errors.push(`fb_ad_accounts upsert: ${error.message}`);
+}
+
 async function markConnection(admin: Admin, id: string, error: string | null) {
   await admin
     .from("connections")
@@ -650,10 +741,35 @@ async function rollupDayIfMissing(
   let efRows: EverflowRow[] = [];
   if (efConn) efRows = await fetchEverflowDay(efConn.api_key, day, efTzId);
 
+  // Exclusiones vigentes: se respetan también al consolidar.
+  const excluidasPorConexion = new Map<string, Set<string>>();
+  if (fbConns.length > 0) {
+    const { data: reglas } = await admin
+      .from("fb_ad_accounts")
+      .select("connection_id,account_id")
+      .eq("excluida", true);
+    for (const r of (reglas ?? []) as {
+      connection_id: string;
+      account_id: string;
+    }[]) {
+      if (!excluidasPorConexion.has(r.connection_id)) {
+        excluidasPorConexion.set(r.connection_id, new Set());
+      }
+      excluidasPorConexion.get(r.connection_id)!.add(r.account_id);
+    }
+  }
+
   // Gasto final del día, de las mismas fuentes que la ingesta intradía
   const spendRows: SpendRow[] = [];
   const settled = await Promise.allSettled([
-    ...fbConns.map((c) => fetchFacebookSpend(c.api_key, day, day)),
+    ...fbConns.map((c) =>
+      fetchFacebookVM(
+        c.api_key,
+        c.business_id,
+        day,
+        excluidasPorConexion.get(c.id) ?? new Set<string>(),
+      ),
+    ),
     ...wsConns.map((c) =>
       fetchWindsorDay(
         keyDeWindsor(c),
@@ -667,12 +783,13 @@ async function rollupDayIfMissing(
   for (let i = 0; i < fbConns.length; i++) {
     const s = settled[i];
     if (s.status !== "fulfilled") continue;
-    for (const acc of s.value as Awaited<ReturnType<typeof fetchFacebookSpend>>) {
+    const res = s.value as Awaited<ReturnType<typeof fetchFacebookVM>>;
+    for (const acc of res.gasto) {
       spendRows.push({
         datasource: "facebook",
-        account_name: acc.name || acc.account_id,
+        account_name: acc.account_name,
         campaign: "",
-        clicks: acc.clicks,
+        clicks: 0,
         spend: acc.spend,
       });
     }

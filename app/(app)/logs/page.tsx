@@ -62,7 +62,11 @@ function resumenFuentes(d: DetalleFuente[]): string {
       const sinCuenta = f.sin_cuenta?.length
         ? ` [sin conectar: ${f.sin_cuenta.join(",")}]`
         : "";
-      return `${ds || f.fuente + ":0"}${monto}${sync}${sinCuenta}`;
+      // Cuentas del VM que se saltaron por estar excluidas.
+      const excl = f.cuentas_excluidas
+        ? ` [${f.cuentas_excluidas} excluidas]`
+        : "";
+      return `${ds || f.fuente + ":0"}${monto}${sync}${sinCuenta}${excl}`;
     })
     .join("  ");
 }
