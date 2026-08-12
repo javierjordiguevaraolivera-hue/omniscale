@@ -56,8 +56,6 @@ export async function updateSession(request: NextRequest) {
   if (
     !user &&
     !publicPaths.includes(request.nextUrl.pathname) &&
-    // /demo y sus subrutas: solo datos inventados, sirve para revisar diseño.
-    !request.nextUrl.pathname.startsWith("/demo") &&
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth") &&
     !request.nextUrl.pathname.startsWith("/api/cron")

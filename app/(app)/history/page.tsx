@@ -2,8 +2,10 @@ import {
   Activity,
   BadgeDollarSign,
   CalendarRange,
-  MousePointerClick,
+  Coins,
   Percent,
+  PiggyBank,
+  Receipt,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -16,9 +18,44 @@ import { RangeTabs } from "@/components/range-tabs";
 import { Panel, PageHeader } from "@/components/panel";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { DataTable } from "@/components/data-table";
-import { HistoryChart, type HistoryPoint } from "@/components/charts/history-chart";
+import {
+  HistoryChart,
+  type HistoryPoint,
+} from "@/components/charts/history-chart";
+import { mesDe, totalDelMes, type Gasto } from "@/lib/gastos";
 
 export const dynamic = "force-dynamic";
+
+/** "2026-08" -> "2026-07". */
+function mesAnterior(mesISO: string): string {
+  let [anio, mes] = mesISO.split("-").map(Number);
+  mes -= 1;
+  if (mes < 1) {
+    mes = 12;
+    anio -= 1;
+  }
+  return `${anio}-${String(mes).padStart(2, "0")}`;
+}
+
+const NOMBRE_MES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+const etiquetaMes = (mesISO: string) => {
+  const [anio, mes] = mesISO.split("-").map(Number);
+  return `${NOMBRE_MES[mes - 1]} ${anio}`;
+};
 
 type SummaryRow = {
   day: string;
@@ -62,19 +99,63 @@ export default async function HistoryPage({
     .order("day");
   if (offerFilter !== null) query = query.eq("offer_id", offerFilter);
 
-  const [sumRes, offersRes] = await Promise.all([
+  // El resultado mensual mira el mes calendario completo, no el rango elegido:
+  // los gastos fijos son mensuales y prorratearlos a 7 días no querría decir
+  // nada. Se piden todos los días del mes en curso y del anterior.
+  const inicioMesAnterior = `${mesAnterior(mesDe(hoy))}-01`;
+
+  const [sumRes, offersRes, mensualRes, gastosRes] = await Promise.all([
     query,
     supabase.from("offers").select("offer_id,name").order("offer_id"),
+    supabase
+      .from("daily_summary")
+      .select("day,spend,revenue,profit,conversions")
+      .gte("day", inicioMesAnterior)
+      .order("day"),
+    supabase.from("gastos").select("*"),
   ]);
   const rows = (sumRes.data ?? []) as SummaryRow[];
   const offers = (offersRes.data ?? []) as { offer_id: number; name: string }[];
+  const diasMensuales = (mensualRes.data ?? []) as Pick<
+    SummaryRow,
+    "day" | "spend" | "revenue" | "profit" | "conversions"
+  >[];
+  // Si falta la migración 0007 la tabla no existe: el resto de la página sigue
+  // funcionando y el bloque mensual avisa.
+  const gastos = (gastosRes.data ?? []) as Gasto[];
+  const faltaTablaGastos = Boolean(gastosRes.error);
+
+  // --- Resultado mensual: ads menos lo que no es ads ---------------------
+  const mesesConData = [
+    ...new Set(diasMensuales.map((d) => mesDe(d.day))),
+  ].sort((a, b) => b.localeCompare(a));
+  const resultadoMensual = mesesConData.map((m) => {
+    const dias = diasMensuales.filter((d) => mesDe(d.day) === m);
+    const profitAds = dias.reduce((t, d) => t + Number(d.profit), 0);
+    const fijos = totalDelMes(gastos, m);
+    return {
+      mes: m,
+      spend: dias.reduce((t, d) => t + Number(d.spend), 0),
+      revenue: dias.reduce((t, d) => t + Number(d.revenue), 0),
+      profitAds,
+      fijos,
+      neto: profitAds - fijos,
+    };
+  });
+  const mesActual = resultadoMensual.find((r) => r.mes === mesDe(hoy));
+  const fijosDelMes = mesActual?.fijos ?? totalDelMes(gastos, mesDe(hoy));
+  const netoDelMes = mesActual?.neto ?? -fijosDelMes;
 
   // Serie por día (suma de ofertas)
   const porDia = new Map<string, HistoryPoint>();
   for (const r of rows) {
-    const p =
-      porDia.get(r.day) ??
-      { day: r.day, spend: 0, revenue: 0, profit: 0, conversions: 0 };
+    const p = porDia.get(r.day) ?? {
+      day: r.day,
+      spend: 0,
+      revenue: 0,
+      profit: 0,
+      conversions: 0,
+    };
     p.spend += Number(r.spend);
     p.revenue += Number(r.revenue);
     p.profit += Number(r.profit);
@@ -112,23 +193,137 @@ export default async function HistoryPage({
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="Gasto" value={money(total.spend)} icono={<Wallet />} />
-        <StatTile label="Conversiones" value={num(total.conversions)} icono={<Activity />} />
-        <StatTile label="Revenue" value={money(total.revenue)} icono={<BadgeDollarSign />} />
+        <StatTile
+          label="Gasto Ads"
+          value={money(total.spend)}
+          icono={<Wallet />}
+        />
+        <StatTile
+          label="Conversiones"
+          value={num(total.conversions)}
+          icono={<Activity />}
+        />
+        <StatTile
+          label="Revenue"
+          value={money(total.revenue)}
+          icono={<BadgeDollarSign />}
+        />
         <StatTile
           label="Profit / Pérdida"
           value={money(total.profit)}
-          tone={total.profit > 0 ? "good" : total.profit < 0 ? "bad" : "neutral"}
+          tone={
+            total.profit > 0 ? "good" : total.profit < 0 ? "bad" : "neutral"
+          }
           icono={<TrendingUp />}
         />
-        <StatTile label="Costo por conversión" value={money(cpa)} icono={<Percent />} />
-        <StatTile label="ROAS" value={`${roas.toFixed(2)}x`} icono={<MousePointerClick />} />
+        <StatTile
+          label="Costo por conversión"
+          value={money(cpa)}
+          icono={<Coins />}
+        />
+        <StatTile
+          label="ROAS"
+          value={`${roas.toFixed(2)}x`}
+          icono={<Percent />}
+        />
       </div>
 
-      <Panel titulo="Profit por día" icono={<CalendarRange className="h-5 w-5" />}>
+      {/* Las dos de abajo son MENSUALES, no del rango: los gastos fijos son
+          mensuales y repartirlos entre 7 días no querría decir nada. */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-2">
+        <StatTile
+          label={`Gastos fijos · ${etiquetaMes(mesDe(hoy))}`}
+          value={money(fijosDelMes)}
+          icono={<Receipt />}
+        />
+        <StatTile
+          label={`Profit neto · ${etiquetaMes(mesDe(hoy))}`}
+          value={money(netoDelMes)}
+          tone={netoDelMes > 0 ? "good" : netoDelMes < 0 ? "bad" : "neutral"}
+          icono={<PiggyBank />}
+        />
+      </div>
+
+      {faltaTablaGastos && (
+        <p className="rounded-lg border border-warning bg-[#fff7f3] px-3 py-2 text-body-md">
+          Falta ejecutar la migración <code>0007</code>: la tabla{" "}
+          <code>gastos</code> no existe todavía, así que el profit neto es igual
+          al de ads.
+        </p>
+      )}
+
+      <p className="text-label-sm text-on-surface-variant">
+        El profit de ads sale del histórico ya consolidado y no se toca nunca.
+        Los gastos fijos se le restan aparte para dar el neto del mes. El mes en
+        curso va incompleto: hoy todavía no está consolidado.
+      </p>
+
+      <DataTable
+        titulo="Resultado mensual"
+        icono={<PiggyBank className="h-5 w-5" />}
+        filas={resultadoMensual}
+        rowKey={(r) => r.mes}
+        vacio="Todavía no hay meses con días consolidados."
+        sustantivo="meses"
+        columnas={[
+          { key: "mes", label: "Mes", render: (r) => etiquetaMes(r.mes) },
+          {
+            key: "spend",
+            label: "Gasto Ads",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{money(r.spend)}</span>
+            ),
+          },
+          {
+            key: "revenue",
+            label: "Revenue",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{money(r.revenue)}</span>
+            ),
+          },
+          {
+            key: "profitAds",
+            label: "Profit Ads",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums">{money(r.profitAds)}</span>
+            ),
+          },
+          {
+            key: "fijos",
+            label: "Gastos fijos",
+            align: "right",
+            render: (r) => (
+              <span className="tabular-nums text-on-surface-variant">
+                {r.fijos > 0 ? `− ${money(r.fijos)}` : "—"}
+              </span>
+            ),
+          },
+          {
+            key: "neto",
+            label: "Profit neto",
+            align: "right",
+            render: (r) => (
+              <span
+                className={`font-semibold tabular-nums ${r.neto >= 0 ? "text-success" : "text-error"}`}
+              >
+                {money(r.neto)}
+              </span>
+            ),
+          },
+        ]}
+      />
+
+      <Panel
+        titulo="Profit por día"
+        icono={<CalendarRange className="h-5 w-5" />}
+      >
         <div className="p-md">
           <p className="mb-md text-label-sm text-on-surface-variant">
-            Azul = ganancia, rojo = pérdida. Pasa el cursor para ver revenue y gasto.
+            Verde = ganancia, rojo = pérdida. Pasa el cursor para ver revenue y
+            gasto.
           </p>
           {serie.length === 0 ? (
             <p className="py-lg text-body-md text-on-surface-variant">

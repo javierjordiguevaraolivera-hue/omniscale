@@ -110,7 +110,8 @@ export async function fetchWindsorPlatform(
       // El nombre es lo que se muestra y de donde sale la oferta. Si Windsor no
       // lo trae, se cae al id para no perder la fila.
       account_name: accountName || accountId,
-      account_id: accountId,
+      // Llave del mapeo. Si Windsor no diera el ID, el nombre hace de llave.
+      account_id: accountId || accountName,
       // Vacío = gasto a nivel de cuenta. No se pide campaña (ver FIELDS).
       campaign: "",
       // Siempre 0: pedirle clicks a Windsor le hace perder gasto (ver FIELDS).

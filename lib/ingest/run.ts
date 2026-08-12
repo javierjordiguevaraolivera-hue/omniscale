@@ -28,6 +28,7 @@ type Connection = {
 
 type SpendMapRow = {
   datasource: string;
+  account_id: string;
   account_name: string;
   campaign: string;
   offer_id: number | null;
@@ -38,6 +39,11 @@ type SpendMapRow = {
 /** Fila de gasto normalizada, venga de Facebook o de Windsor. */
 export type SpendRow = {
   datasource: string;
+  /**
+   * Identificador estable de la cuenta. Facebook y Windsor lo dan los dos; si
+   * alguna fuente no lo diera, se usa el nombre para no quedarse sin llave.
+   */
+  account_id: string;
   account_name: string;
   campaign: string; // "" = gasto a nivel cuenta (Facebook)
   clicks: number;
@@ -85,9 +91,23 @@ export type IngestResult = {
   errors: string[];
 };
 
-/** Clave del mapeo, para comparar sin ambigüedad. */
-const claveMapa = (datasource: string, account: string, campaign: string) =>
-  `${datasource} ${account} ${campaign}`;
+/**
+ * Separador de las claves compuestas. Se construye en runtime en vez de
+ * escribirlo dentro de la cadena: así el archivo queda en ASCII puro. Un byte
+ * NUL literal vuelve el archivo "binario" y grep deja de encontrar nada aquí.
+ *
+ * Tiene que ser un carácter imposible en un nombre de cuenta o de campaña. Con
+ * un espacio la clave sería ambigua: "a b" + "c" y "a" + "b c" darían la misma.
+ */
+const SEP = String.fromCharCode(0);
+
+/**
+ * Clave del mapeo. Va por account **ID**, no por nombre: si se renombra una
+ * cuenta en la plataforma, el mapeo tiene que seguir en pie. Antes iba por
+ * nombre y un renombre mandaba ese gasto a "sin asignar" sin avisar.
+ */
+const claveMapa = (datasource: string, accountId: string, campaign: string) =>
+  [datasource, accountId, campaign].join(SEP);
 
 const sumar = (mapa: Record<string, number>, clave: string) => {
   mapa[clave] = (mapa[clave] ?? 0) + 1;
@@ -286,6 +306,8 @@ export async function runIngest(
     for (const acc of res.gasto) {
       spendRows.push({
         datasource: "facebook",
+        // El ID es la llave del mapeo y lo que Everflow manda en sub1.
+        account_id: acc.account_id || acc.account_name,
         account_name: acc.account_name,
         campaign: "",
         clicks: 0, // el gasto de Facebook se pide a nivel de cuenta, sin clicks
@@ -501,6 +523,9 @@ export async function runIngest(
         offer_id: r.offer_id,
         offer_name: r.offer_name,
         source_id: r.source_id,
+        platform: r.platform,
+        sub1: r.sub1,
+        account_id: r.account_id,
         clicks: r.clicks,
         unique_clicks: r.unique_clicks,
         conversions: r.conversions,
@@ -514,16 +539,20 @@ export async function runIngest(
   if (spendRows.length > 0) {
     const filas = spendRows.map((r) => {
       const offerId =
-        mapeo.get(claveMapa(r.datasource, r.account_name, r.campaign)) ?? null;
+        mapeo.get(claveMapa(r.datasource, r.account_id, r.campaign)) ?? null;
       if (offerId === null && r.spend > 0) sinAsignar++;
       return {
         captured_at: capturedAt,
         day,
         datasource: r.datasource,
+        account_id: r.account_id,
         account_name: r.account_name,
         campaign: r.campaign,
         clicks: r.clicks,
         spend: r.spend,
+        // Rastro de auditoría: lo que decía el mapeo al capturar. Para el día
+        // vigente el panel NO lee esto, resuelve contra `spend_map` (0007), así
+        // un cambio de oferta a mediodía cuenta para todo el día.
         offer_id: offerId,
       };
     });
@@ -683,16 +712,19 @@ async function syncSpendMap(
 
   const { data: existentes } = await admin
     .from("spend_map")
-    .select("datasource,account_name,campaign,offer_id,auto_mapped,origen");
+    .select(
+      "datasource,account_id,account_name,campaign,offer_id,auto_mapped,origen",
+    );
   const previos = new Map(
     ((existentes ?? []) as SpendMapRow[]).map((m) => [
-      claveMapa(m.datasource, m.account_name, m.campaign),
+      claveMapa(m.datasource, m.account_id, m.campaign),
       m,
     ]),
   );
 
   const upserts: {
     datasource: string;
+    account_id: string;
     account_name: string;
     campaign: string;
     offer_id: number | null;
@@ -705,7 +737,7 @@ async function syncSpendMap(
   const vistas = new Set<string>();
 
   for (const r of spendRows) {
-    const clave = claveMapa(r.datasource, r.account_name, r.campaign);
+    const clave = claveMapa(r.datasource, r.account_id, r.campaign);
     if (vistas.has(clave)) continue;
     vistas.add(clave);
 
@@ -730,6 +762,10 @@ async function syncSpendMap(
     mapeo.set(clave, offerId);
     upserts.push({
       datasource: r.datasource,
+      account_id: r.account_id,
+      // El nombre se guarda aunque la llave sea el ID: es lo que se muestra, y
+      // un ID de cuenta no hay quien lo reconozca de memoria. Si la cuenta se
+      // renombra, aquí se actualiza el nombre y el mapeo sigue intacto.
       account_name: r.account_name,
       campaign: r.campaign,
       offer_id: offerId,
@@ -815,6 +851,7 @@ async function rollupDayIfMissing(
     for (const acc of res.gasto) {
       spendRows.push({
         datasource: "facebook",
+        account_id: acc.account_id || acc.account_name,
         account_name: acc.account_name,
         campaign: "",
         clicks: 0,
@@ -841,26 +878,28 @@ async function rollupDayIfMissing(
     }
   }
 
-  // Mapeo congelado: último snapshot de gasto de ese día
+  // Mapeo del cierre del día: última captura de gasto de esa fecha. Ya viene con
+  // la oferta resuelta contra el mapeo vigente en ese momento (ver 0007), así
+  // que un cambio hecho a mediodía aplica al día completo, que es la regla.
   const congelado = new Map<string, number | null>();
   const { data: ultimo } = await admin.rpc("latest_spend", { p_day: day });
   for (const row of (ultimo ?? []) as {
     datasource: string;
-    account_name: string;
+    account_id: string;
     campaign: string;
     offer_id: number | null;
   }[]) {
     congelado.set(
-      claveMapa(row.datasource, row.account_name, row.campaign),
+      claveMapa(row.datasource, row.account_id, row.campaign),
       row.offer_id,
     );
   }
   const { data: actual } = await admin
     .from("spend_map")
-    .select("datasource,account_name,campaign,offer_id");
+    .select("datasource,account_id,campaign,offer_id");
   const mapaActual = new Map(
     ((actual ?? []) as SpendMapRow[]).map((m) => [
-      claveMapa(m.datasource, m.account_name, m.campaign),
+      claveMapa(m.datasource, m.account_id, m.campaign),
       m.offer_id,
     ]),
   );
@@ -890,7 +929,7 @@ async function rollupDayIfMissing(
   }
   for (const r of spendRows) {
     if (r.spend === 0) continue;
-    const clave = claveMapa(r.datasource, r.account_name, r.campaign);
+    const clave = claveMapa(r.datasource, r.account_id, r.campaign);
     const offerId = congelado.get(clave) ?? mapaActual.get(clave) ?? null;
     bucket(offerId ?? 0, offerId === null ? "Sin asignar" : "").spend += r.spend;
   }

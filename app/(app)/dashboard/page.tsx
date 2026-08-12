@@ -2,8 +2,8 @@ import Link from "next/link";
 import {
   Activity,
   BadgeDollarSign,
+  Coins,
   Layers,
-  MousePointerClick,
   Percent,
   Radio,
   TrendingUp,
@@ -36,12 +36,15 @@ type OfferSourceRow = {
   offer_id: number;
   offer_name: string;
   source_id: string;
+  /** sub1 validado como ID de cuenta. null = sub1 traía otra cosa. */
+  account_id: string | null;
   clicks: number;
   conversions: number;
   revenue: number;
 };
 type SpendRow = {
   datasource: string;
+  account_id: string;
   account_name: string;
   campaign: string;
   clicks: number;
@@ -82,6 +85,78 @@ export default async function DashboardPage({
     offerSource = offerSource.filter((r) => r.offer_id === offerFilter);
     spendRows = spendRows.filter((r) => r.offer_id === offerFilter);
   }
+
+  // Everflow ahora devuelve una fila por oferta × plataforma × sub1. Para las
+  // vistas por oferta hay que volver a juntar el sub1; se usa aparte, más
+  // abajo, para repartir por cuenta publicitaria.
+  const porOfertaPlataforma = new Map<string, OfferSourceRow>();
+  for (const r of offerSource) {
+    const clave = `${r.offer_id}|${r.source_id}`;
+    const b =
+      porOfertaPlataforma.get(clave) ??
+      ({
+        ...r,
+        account_id: null,
+        clicks: 0,
+        conversions: 0,
+        revenue: 0,
+      } as OfferSourceRow);
+    b.clicks += Number(r.clicks);
+    b.conversions += Number(r.conversions);
+    b.revenue += Number(r.revenue);
+    porOfertaPlataforma.set(clave, b);
+  }
+  const ofertaPlataforma = [...porOfertaPlataforma.values()].sort(
+    (a, b) => b.revenue - a.revenue,
+  );
+
+  // --- Por cuenta publicitaria -------------------------------------------
+  // Solo es posible cuando Everflow manda el account id en sub1. Mientras traiga
+  // el nombre de la campaña (las campañas viejas), esto sale vacío y se dice por
+  // qué en vez de mostrar una tabla en blanco.
+  type FilaCuenta = {
+    account_id: string;
+    nombre: string;
+    spend: number;
+    conversions: number;
+    revenue: number;
+  };
+  const nombrePorId = new Map(
+    spendRows.map((r) => [r.account_id, r.account_name]),
+  );
+  const porCuenta = new Map<string, FilaCuenta>();
+  const cuenta = (id: string) => {
+    let b = porCuenta.get(id);
+    if (!b) {
+      b = {
+        account_id: id,
+        nombre: nombrePorId.get(id) ?? "",
+        spend: 0,
+        conversions: 0,
+        revenue: 0,
+      };
+      porCuenta.set(id, b);
+    }
+    return b;
+  };
+  let revenueSinCuenta = 0;
+  for (const r of offerSource) {
+    if (!r.account_id) {
+      revenueSinCuenta += Number(r.revenue);
+      continue;
+    }
+    const b = cuenta(r.account_id);
+    b.conversions += Number(r.conversions);
+    b.revenue += Number(r.revenue);
+  }
+  const hayRevenuePorCuenta = porCuenta.size > 0;
+  // El gasto por cuenta sí existe siempre; se suma solo si hay con qué cruzarlo.
+  if (hayRevenuePorCuenta) {
+    for (const r of spendRows) cuenta(r.account_id).spend += Number(r.spend);
+  }
+  const filasCuenta = [...porCuenta.values()].sort(
+    (a, b) => b.revenue - b.spend - (a.revenue - a.spend),
+  );
 
   const puntos: Point[] = series.map((r) => {
     const spend = Number(r.spend);
@@ -183,7 +258,7 @@ export default async function DashboardPage({
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="Gasto" value={money(spend)} icono={<Wallet />} />
+        <StatTile label="Gasto Ads" value={money(spend)} icono={<Wallet />} />
         <StatTile label="Conversiones" value={num(conversions)} icono={<Activity />} />
         <StatTile label="Revenue" value={money(revenue)} icono={<BadgeDollarSign />} />
         <StatTile
@@ -192,8 +267,8 @@ export default async function DashboardPage({
           tone={profit > 0 ? "good" : profit < 0 ? "bad" : "neutral"}
           icono={<TrendingUp />}
         />
-        <StatTile label="Costo por conversión" value={money(cpa)} icono={<Percent />} />
-        <StatTile label="ROAS" value={`${roas.toFixed(2)}x`} icono={<MousePointerClick />} />
+        <StatTile label="Costo por conversión" value={money(cpa)} icono={<Coins />} />
+        <StatTile label="ROAS" value={`${roas.toFixed(2)}x`} icono={<Percent />} />
       </div>
 
       {sinAsignar.length > 0 && (
@@ -294,7 +369,7 @@ export default async function DashboardPage({
       <DataTable
         titulo="Por oferta y plataforma"
         icono={<Layers className="h-5 w-5" />}
-        filas={offerSource}
+        filas={ofertaPlataforma}
         rowKey={(r) => `${r.offer_id}-${r.source_id}`}
         vacio="Sin conversiones registradas hoy."
         sustantivo="filas"
@@ -341,11 +416,95 @@ export default async function DashboardPage({
         ]}
       />
 
+      {hayRevenuePorCuenta ? (
+        <DataTable
+          titulo="Por cuenta publicitaria"
+          icono={<Wallet className="h-5 w-5" />}
+          filas={filasCuenta}
+          rowKey={(r) => r.account_id}
+          vacio="Sin data por cuenta."
+          sustantivo="cuentas"
+          columnas={[
+            {
+              key: "cuenta",
+              label: "Cuenta",
+              render: (r) => (
+                <div className="flex flex-col">
+                  <span>{r.nombre || "(no está en el gasto de hoy)"}</span>
+                  <span className="font-mono text-label-sm text-on-surface-variant">
+                    {r.account_id}
+                  </span>
+                </div>
+              ),
+            },
+            {
+              key: "spend",
+              label: "Gasto",
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">{money(r.spend)}</span>
+              ),
+            },
+            {
+              key: "cv",
+              label: "Conversiones",
+              align: "right",
+              render: (r) => <span className="tabular-nums">{num(r.conversions)}</span>,
+            },
+            {
+              key: "revenue",
+              label: "Revenue",
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">{money(r.revenue)}</span>
+              ),
+            },
+            {
+              key: "cpa",
+              label: "Costo por conversión",
+              align: "right",
+              render: (r) => (
+                <span className="tabular-nums">
+                  {r.conversions > 0 ? money(r.spend / r.conversions) : "—"}
+                </span>
+              ),
+            },
+            {
+              key: "profit",
+              label: "Profit",
+              align: "right",
+              render: (r) => {
+                const p = r.revenue - r.spend;
+                return (
+                  <span
+                    className={`font-semibold tabular-nums ${p >= 0 ? "text-success" : "text-error"}`}
+                  >
+                    {money(p)}
+                  </span>
+                );
+              },
+            },
+          ]}
+        />
+      ) : (
+        <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-md text-body-md">
+          <p className="font-semibold text-on-surface">
+            Todavía no se puede repartir el revenue por cuenta publicitaria
+          </p>
+          <p className="mt-1 text-on-surface-variant">
+            Everflow manda en <code>sub1</code> el nombre de la campaña, no el ID
+            de la cuenta, así que no hay con qué cruzarlo: {money(revenueSinCuenta)}{" "}
+            de revenue queda solo a nivel de oferta. En cuanto los links lleven el
+            account ID en <code>sub1</code>, esta tabla aparece sola.
+          </p>
+        </div>
+      )}
+
       <DataTable
         titulo="Gasto por cuenta y campaña"
         icono={<Wallet className="h-5 w-5" />}
         filas={spendRows}
-        rowKey={(r) => `${r.datasource}|${r.account_name}|${r.campaign}`}
+        rowKey={(r) => `${r.datasource}|${r.account_id}|${r.campaign}`}
         vacio="Sin gasto capturado hoy."
         sustantivo="campañas"
         acciones={

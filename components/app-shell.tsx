@@ -6,8 +6,10 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  Receipt,
   ScrollText,
   Settings,
+  Tags,
   Wallet,
 } from "lucide-react";
 import Image from "next/image";
@@ -27,7 +29,9 @@ const navItems: {
 }[] = [
   { label: "Panel", href: "/dashboard", icon: LayoutDashboard },
   { label: "Histórico", href: "/history", icon: CalendarRange },
+  { label: "Ofertas", href: "/offers", icon: Tags },
   { label: "Cuentas", href: "/accounts", icon: Wallet },
+  { label: "Gastos", href: "/expenses", icon: Receipt },
   { label: "BMs", href: "/bms", icon: Facebook },
   { label: "Conexiones", href: "/connections", icon: KeyRound },
   { label: "Logs", href: "/logs", icon: ScrollText },

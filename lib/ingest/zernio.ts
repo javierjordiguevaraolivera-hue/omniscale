@@ -110,10 +110,13 @@ export async function fetchZernioDay(
       "";
     const campaign =
       ad.campaignName?.trim() || ad.platformCampaignId?.trim() || "";
+    // El mapeo se lleva por ID; si Zernio no lo trae, el nombre hace de llave.
+    const accountId = ad.platformAdAccountId?.trim() || account;
 
-    const clave = `${datasource}|${account}|${campaign}`;
+    const clave = `${datasource}|${accountId}|${campaign}`;
     const fila = porClave.get(clave) ?? {
       datasource,
+      account_id: accountId,
       account_name: account,
       campaign,
       clicks: 0,

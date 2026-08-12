@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 type SpendMap = {
   datasource: string;
+  account_id: string;
   account_name: string;
   campaign: string;
   offer_id: number | null;
@@ -38,7 +39,7 @@ export default async function AccountsPage() {
   const [mapRes, offersRes] = await Promise.all([
     supabase
       .from("spend_map")
-      .select("datasource,account_name,campaign,offer_id,origen")
+      .select("datasource,account_id,account_name,campaign,offer_id,origen")
       .order("datasource")
       .order("account_name")
       .order("campaign"),
@@ -57,7 +58,7 @@ export default async function AccountsPage() {
     <div className="flex flex-col gap-md">
       <PageHeader
         titulo="Cuentas y campañas"
-        descripcion="La oferta se detecta del nombre: primero oid_<ID> en la campaña, luego en la cuenta, y si no, un número que coincida con una oferta de Everflow. Cambiarla solo afecta las capturas futuras; el histórico conserva la que tenía."
+        descripcion="La oferta se detecta del nombre: primero oid_<ID> en la campaña, luego en la cuenta, y si no, un número que coincida con una oferta de Everflow. Cambiarla cuenta para TODO el día de hoy, no solo de aquí en adelante; los días ya consolidados no se tocan. La cuenta se identifica por su ID, así que renombrarla en la plataforma no rompe el mapeo."
       >
         <AutoRefresh segundos={120} />
       </PageHeader>
@@ -77,7 +78,7 @@ export default async function AccountsPage() {
         titulo="Mapeo plataforma · cuenta · campaña → oferta"
         icono={<Wallet className="h-5 w-5" />}
         filas={ordenadas}
-        rowKey={(f) => `${f.datasource}|${f.account_name}|${f.campaign}`}
+        rowKey={(f) => `${f.datasource}|${f.account_id}|${f.campaign}`}
         vacio="Todavía no se ha descubierto ninguna campaña. Registra la API key de Windsor en Conexiones y ejecuta una actualización."
         sustantivo="combinaciones"
         alto="max-h-[calc(100vh-22rem)]"
@@ -88,9 +89,18 @@ export default async function AccountsPage() {
             render: (f) => platformLabel(f.datasource),
           },
           {
+            // Se muestran los dos: el ID es la llave del mapeo y lo que Everflow
+            // manda en sub1, pero un ID no hay quien lo reconozca de memoria.
             key: "cuenta",
             label: "Cuenta",
-            render: (f) => f.account_name || "—",
+            render: (f) => (
+              <div className="flex flex-col">
+                <span>{f.account_name || "—"}</span>
+                <span className="font-mono text-label-sm text-on-surface-variant">
+                  {f.account_id}
+                </span>
+              </div>
+            ),
           },
           {
             key: "campana",
@@ -116,7 +126,7 @@ export default async function AccountsPage() {
             render: (f) => (
               <ActionForm accion={assignOffer} className="flex items-center gap-2">
                 <input type="hidden" name="datasource" value={f.datasource} />
-                <input type="hidden" name="account_name" value={f.account_name} />
+                <input type="hidden" name="account_id" value={f.account_id} />
                 <input type="hidden" name="campaign" value={f.campaign} />
                 <select
                   name="offer_id"
