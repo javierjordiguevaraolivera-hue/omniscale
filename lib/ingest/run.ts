@@ -844,6 +844,23 @@ async function rollupDayIfMissing(
     ),
     ...zeConns.map((c) => fetchZernioDay(c.api_key, day)),
   ]);
+
+  // Una fuente de gasto que falla NO puede consolidarse como si hubiera gastado
+  // cero: la fila de daily_summary se escribe UNA vez y nunca se recalcula, así
+  // que un token caído dejaría ese día con el profit inflado para siempre y sin
+  // ninguna señal. Mejor no consolidar y reintentar en la corrida siguiente: un
+  // día que falta se ve, un día con el número mal no.
+  const caidas = settled
+    .filter((s) => s.status === "rejected")
+    .map((s) => mensajeDeError((s as PromiseRejectedResult).reason));
+  if (caidas.length > 0) {
+    throw new Error(
+      `no se consolida ${day}: ${caidas.length} fuente(s) de gasto fallaron (${[
+        ...new Set(caidas),
+      ].join(" · ")}). Se reintenta en la corrida siguiente.`,
+    );
+  }
+
   for (let i = 0; i < fbConns.length; i++) {
     const s = settled[i];
     if (s.status !== "fulfilled") continue;

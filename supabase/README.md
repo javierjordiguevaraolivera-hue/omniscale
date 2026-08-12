@@ -26,7 +26,7 @@ escrito y se puede leer en orden.
 | `0004_conexion_zernio.sql` | **Ejecutado** | Permite `platform=zernio` en `connections` |
 | `0005_serie_arrastra_valores.sql` | **Ejecutado** | `intraday_series` arrastra el último valor conocido (para las dos cadencias) |
 | `0006_facebook_propio_y_exclusiones.sql` | **Ejecutado** | `connections.business_id` + tabla `fb_ad_accounts` con exclusiones por BM |
-| `0007_mapeo_por_id_ofertas_y_gastos.sql` | **Pendiente** | El mapeo pasa a llevarse por `account_id`; la oferta del día se resuelve al leer; `offers` gana `conversion_type` y `active`; `sub1`/`platform` en Everflow; tabla `gastos` |
+| `0007_mapeo_por_id_ofertas_y_gastos.sql` | **Ejecutado** | El mapeo pasa a llevarse por `account_id`; la oferta del día se resuelve al leer; `offers` gana `conversion_type` y `active`; `sub1`/`platform` en Everflow; tabla `gastos` |
 
 ## Convenciones
 
