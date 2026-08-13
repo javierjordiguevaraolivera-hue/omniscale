@@ -8,13 +8,13 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - images - .svg, .png, .jpg, .jpeg, .gif, .webp
-     * Feel free to modify this pattern to include more paths.
+     * Todas las rutas EXCEPTO:
+     * - _next/static, _next/image (archivos de Next)
+     * - favicon.ico e imágenes
+     * - manifest.webmanifest y sw.js: los pide el navegador SIN cookies de
+     *   sesión al instalar la app; si pasaran por el middleware acabarían en un
+     *   redirect al login y no habría instalación posible.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

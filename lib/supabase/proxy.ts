@@ -52,6 +52,9 @@ export async function updateSession(request: NextRequest) {
     "/terms-and-conditions",
     "/privacy-policy",
     "/data-deletion-policy",
+    // La sirve el service worker cuando no hay red; si pidiera sesión, sin
+    // conexión no se podría ni comprobar y acabaría en un redirect a ciegas.
+    "/offline",
   ];
   if (
     !user &&

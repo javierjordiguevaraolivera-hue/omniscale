@@ -40,4 +40,21 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* En móvil, el rebote vertical de la página hace que la barra de pestañas fija
+     parezca despegarse del borde de abajo. */
+  html {
+    overscroll-behavior-y: none;
+  }
+}
+
+@layer utilities {
+  /* La barra de pestañas se desliza; su scrollbar estorba y de todos modos lo
+     que queda por deslizar ya se indica con las flechas de los extremos. */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }

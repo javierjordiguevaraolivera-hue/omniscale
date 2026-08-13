@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Sidebar } from "@/components/app-shell";
+import { AppNav } from "@/components/app-shell";
 import { hasEnvVars } from "@/lib/utils";
 
 export default async function AppLayout({
@@ -16,11 +16,15 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen bg-surface-bright text-on-surface">
-      <Sidebar email={String(data.claims.email ?? "")} />
+      <AppNav email={String(data.claims.email ?? "")} />
       {/* El indicador "en vivo" (AutoRefresh) va en cada pantalla de datos, no
           aquí: en Ajustes y Conexiones no hace falta refrescar y podría estorbar
           mientras se escribe un token. */}
-      <main className="ml-[260px] min-h-screen px-lg pb-lg pt-lg">{children}</main>
+      {/* En móvil y tablet el margen de abajo deja libre la barra de pestañas y
+          la franja de gestos del teléfono; en escritorio, el ancho del sidebar. */}
+      <main className="min-h-screen px-md pb-[calc(5.25rem+env(safe-area-inset-bottom))] pt-md lg:ml-[260px] lg:px-lg lg:pb-lg lg:pt-lg">
+        {children}
+      </main>
     </div>
   );
 }
