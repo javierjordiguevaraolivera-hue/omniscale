@@ -27,6 +27,7 @@ escrito y se puede leer en orden.
 | `0005_serie_arrastra_valores.sql` | **Ejecutado** | `intraday_series` arrastra el último valor conocido (para las dos cadencias) |
 | `0006_facebook_propio_y_exclusiones.sql` | **Ejecutado** | `connections.business_id` + tabla `fb_ad_accounts` con exclusiones por BM |
 | `0007_mapeo_por_id_ofertas_y_gastos.sql` | **Ejecutado** | El mapeo pasa a llevarse por `account_id`; la oferta del día se resuelve al leer; `offers` gana `conversion_type` y `active`; `sub1`/`platform` en Everflow; tabla `gastos` |
+| `0008_everflow_timezone_ny.sql` | **Pendiente** | `everflow_timezone_id` 67 → 80: en Everflow 67 es UTC, no New York (80 sí). Las conversiones de 8pm–medianoche NY caían al día siguiente |
 
 ## Convenciones
 

@@ -177,7 +177,10 @@ export async function runIngest(
     .eq("id", 1)
     .single();
   const tz: string = settings?.timezone ?? "America/New_York";
-  const efTzId: number = settings?.everflow_timezone_id ?? 67;
+  // OJO: en Everflow 80 = America/New_York y 67 = UTC. Durante semanas se usó
+  // 67 creyendo que era NY, y las conversiones de 8pm-medianoche NY caían al
+  // día siguiente (catálogo: GET /v1/meta/timezones).
+  const efTzId: number = settings?.everflow_timezone_id ?? 80;
   const retentionDays: number = settings?.retention_days ?? 3;
 
   const day = todayInTz(tz);

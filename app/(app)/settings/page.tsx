@@ -38,7 +38,7 @@ export default async function SettingsPage() {
       .order("version"),
   ]);
   const tz = data?.timezone ?? "America/New_York";
-  const efId = data?.everflow_timezone_id ?? 67;
+  const efId = data?.everflow_timezone_id ?? 80;
   const retention = data?.retention_days ?? 3;
   const migraciones = (migRes.data ?? []) as Migracion[];
   const faltaRegistro = Boolean(migRes.error);
@@ -80,9 +80,10 @@ export default async function SettingsPage() {
               className={inputClass}
             />
             <span className="mt-1 block text-label-sm text-on-surface-variant">
-              Everflow identifica las zonas por número, no por nombre. 67 = New
-              York. Debe coincidir con la zona de arriba para que el corte de día
-              cuadre.
+              Everflow identifica las zonas por número, no por nombre:{" "}
+              <strong>80 = America/New_York</strong> y 67 = UTC (ojo, no es New
+              York). Debe coincidir con la zona de arriba para que el corte de
+              día cuadre. El catálogo completo sale de GET /v1/meta/timezones.
             </span>
           </label>
 

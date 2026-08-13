@@ -158,7 +158,8 @@ export async function updateScope(_previo: string | null, formData: FormData) {
 export async function updateSettings(_previo: string | null, formData: FormData) {
   return conManejoDeError(async () => {
     const timezone = String(formData.get("timezone") ?? "America/New_York");
-    const everflowTzId = Number(formData.get("everflow_timezone_id") ?? 67);
+    // 80 = America/New_York en el catálogo de Everflow (67 es UTC).
+    const everflowTzId = Number(formData.get("everflow_timezone_id") ?? 80);
     const retention = Number(formData.get("retention_days") ?? 3);
     // valida que la zona exista
     new Intl.DateTimeFormat("en-US", { timeZone: timezone });
