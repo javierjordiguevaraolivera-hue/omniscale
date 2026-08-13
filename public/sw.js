@@ -16,7 +16,9 @@
  * navegador ofrezca instalar la app.
  */
 
-const VERSION = "omni-v1";
+// Subir la versión invalida el caché anterior en los clientes ya instalados
+// (v2: iconos nuevos sobre fondo blanco).
+const VERSION = "omni-v2";
 const ESENCIALES = ["/offline", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (evento) => {

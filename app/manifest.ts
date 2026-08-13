@@ -22,7 +22,9 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     // En tablet se usa horizontal y en teléfono vertical, así que no se fija.
     orientation: "any",
-    background_color: "#f7f9fc",
+    // Blanco como el fondo de los iconos: el splash de Android pinta el icono
+    // sobre este color y con otro tono se veria el cuadrado del icono.
+    background_color: "#ffffff",
     theme_color: "#16243d",
     categories: ["business", "productivity", "finance"],
     icons: [
